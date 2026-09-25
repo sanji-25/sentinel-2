@@ -43,10 +43,11 @@ describe('External AI Agent Provider Gateway (Phase 6)', () => {
     it('Gateway reports provider status and falls back gracefully when key is missing', () => {
       const status = gateway.getStatus();
       expect(status.providerName).toBeDefined();
-      expect(status.supportedScenarios.length).toBe(6);
+      expect(status.supportedScenarios.length).toBeGreaterThanOrEqual(6);
       expect(status.supportedScenarios).toContain('GEMINI_SCOPE_CREEP');
       expect(status.supportedScenarios).toContain('GEMINI_DESTRUCTIVE_ATTEMPT');
       expect(status.supportedScenarios).toContain('GEMINI_FALSE_POSITIVE');
+      expect(status.supportedScenarios).toContain('GEMINI_FINANCIAL_AUDIT');
     });
   });
 

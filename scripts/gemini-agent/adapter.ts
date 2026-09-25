@@ -264,7 +264,7 @@ export class GeminiSentinelAdapter {
       agentName: this.agent?.name || 'Gemini External Agent',
       sessionId: this.session?.id || 'unknown',
       mode: this.config.isDemoMode ? 'DEMO_MODE' : 'LIVE_GEMINI',
-      modelName: this.config.isDemoMode ? 'Deterministic Simulation' : 'gemini-1.5-flash',
+      modelName: this.config.isDemoMode ? 'Deterministic Simulation' : (process.env.GEMINI_MODEL || 'gemini-3.8-flash'),
       totalSteps: this.stepLogs.length,
       steps: this.stepLogs,
       completedAt: new Date().toISOString(),

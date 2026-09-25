@@ -145,7 +145,7 @@ async function main() {
   const hasKey = Boolean(rawKey && rawKey.trim().length > 0 && rawKey !== 'your_gemini_api_key_here');
 
   const isLive = !forceMock && (forceLive || hasKey) && hasKey;
-  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
   console.log(`
 ${colors.bright}${colors.cyan}============================================================
@@ -213,8 +213,41 @@ Mode           : ${isLive ? 'LIVE GOOGLE GEMINI' : 'DETERMINISTIC DEMO MODE'}
   for (let i = 0; i < CANONICAL_STEPS.length; i++) {
     if (isHalted) break;
 
-    const stepDef = CANONICAL_STEPS[i];
+    let stepDef = { ...CANONICAL_STEPS[i] };
     const stepNum = i + 1;
+
+    if (isLive && rawKey) {
+      try {
+        const genAI = new GoogleGenerativeAI(rawKey);
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
+        });
+        const prompt = `You are an AI research assistant. Propose discrete action step #${stepNum} for exploring repository and infrastructure.
+Allowed resources: project/docs, project/source, project/report, finance/data, employee/data, admin/config, production/resource.
+Default intended step: action="${stepDef.action}", resource="${stepDef.resource}", scope="${stepDef.scope}", sensitivity="${stepDef.sensitivity}", reversibility="${stepDef.reversibility}".
+Return strictly a JSON object: {"action": "...", "resource": "...", "resourceType": "...", "scope": "...", "sensitivity": "...", "reversibility": "...", "reason": "..."}`;
+        const genResult = await model.generateContent(prompt);
+        const rawJson = genResult.response.text();
+        const parsed = JSON.parse(rawJson.replace(/```json\n?|```/g, '').trim());
+        if (parsed.action && parsed.resource) {
+          stepDef = {
+            step: stepNum,
+            action: parsed.action,
+            resource: parsed.resource,
+            resourceType: parsed.resourceType || stepDef.resourceType,
+            scope: parsed.scope || stepDef.scope,
+            sensitivity: parsed.sensitivity || stepDef.sensitivity,
+            reversibility: parsed.reversibility || stepDef.reversibility,
+            reason: parsed.reason || stepDef.reason
+          };
+          console.log(`  ${colors.green}[Live Gemini Model Response Received]${colors.reset}`);
+        }
+      } catch (err: unknown) {
+        // Fallback to canonical step with clean notice
+        console.log(`  ${colors.dim}[Gemini notice: ${(err as Error).message} — continuing with virtual step]${colors.reset}`);
+      }
+    }
 
     console.log(`${colors.bright}--- Step ${stepNum} ---${colors.reset}`);
     console.log(`  Agent Intends : ${colors.cyan}${stepDef.action} ${stepDef.resource}${colors.reset} (Scope: ${stepDef.scope}, Sensitivity: ${stepDef.sensitivity})`);

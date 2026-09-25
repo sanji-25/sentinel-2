@@ -40,6 +40,12 @@ export class BadRequestError extends AppError {
   }
 }
 
+export class ThrottledError extends AppError {
+  constructor(message = 'Request rate limit exceeded. Please retry later.', details?: unknown) {
+    super(message, 429, 'RATE_LIMIT_EXCEEDED', details);
+  }
+}
+
 export function errorHandler(
   err: Error | AppError,
   req: Request,

@@ -13,17 +13,22 @@ import {
 } from '@sentinel/shared';
 
 export type GeminiScenarioId =
+  | 'GEMINI_CUSTOMER_SUPPORT'
   | 'GEMINI_NORMAL'
   | 'GEMINI_SCOPE_CREEP'
   | 'GEMINI_SENSITIVE_ACCESS'
   | 'GEMINI_PRIVILEGE_ESCALATION'
   | 'GEMINI_DESTRUCTIVE_ATTEMPT'
   | 'GEMINI_FALSE_POSITIVE'
+  | 'GEMINI_FINANCIAL_AUDIT'
+  | 'CUSTOMER_SUPPORT'
+  | 'CUSTOMER_TOOL_CONTROL'
   | 'NORMAL_RESEARCH'
   | 'SCOPE_CREEP'
   | 'PRIVILEGE_ESCALATION'
   | 'DESTRUCTIVE_ATTEMPT'
-  | 'FALSE_POSITIVE_CASE';
+  | 'FALSE_POSITIVE_CASE'
+  | 'FINANCIAL_AUDIT';
 
 export interface ProposedAction {
   action: ActionType;
@@ -34,6 +39,10 @@ export interface ProposedAction {
   reversibility: ActionReversibility;
   reason: string;
   rawModelOutput?: string;
+  tool?: string;
+  toolParams?: Record<string, unknown>;
+  toolExecutionState?: 'SUCCESS' | 'WAITING_FOR_HUMAN_APPROVAL' | 'BLOCKED_NOT_EXECUTED' | 'DENIED_NOT_EXECUTED';
+  toolResult?: unknown;
 }
 
 export interface AgentTaskContext {
@@ -99,8 +108,13 @@ export interface ControlledStepResult {
     risk: string;
     actionRecommendation: string;
   };
+  tool?: string;
+  toolExecutionState?: 'SUCCESS' | 'WAITING_FOR_HUMAN_APPROVAL' | 'BLOCKED_NOT_EXECUTED' | 'DENIED_NOT_EXECUTED';
+  toolResult?: unknown;
+  preventionProof?: string;
   executed: boolean;
   halted: boolean;
+  spamSignals?: import('@sentinel/shared').SpamSignals;
 }
 
 export interface ControlledSessionRunResult {

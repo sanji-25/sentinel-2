@@ -10,3 +10,5 @@ export * from './review.js';
 export * from './response.js';
 export * from './audit.js';
 export * from './evaluation.js';
+export * from './simulation.js';
+export * from './spam.js';

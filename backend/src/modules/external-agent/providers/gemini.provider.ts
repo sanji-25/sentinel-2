@@ -17,12 +17,12 @@ export class GeminiAgentProvider implements ExternalAgentProvider {
   private client: GoogleGenerativeAI | null = null;
 
   constructor(apiKey?: string, modelName?: string) {
-    const rawKey = apiKey || process.env.GEMINI_API_KEY;
+    const rawKey = apiKey !== undefined ? apiKey : process.env.GEMINI_API_KEY;
     this.apiKey = rawKey && rawKey.trim().length > 0 && rawKey !== 'your_gemini_api_key_here'
       ? rawKey.trim()
       : undefined;
 
-    this.modelName = modelName || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    this.modelName = modelName || process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
     if (this.apiKey) {
       this.client = new GoogleGenerativeAI(this.apiKey);
@@ -82,9 +82,10 @@ Every proposed action is reviewed by Sentinel 2.0 before execution.
 You MUST respond ONLY with a JSON object conforming strictly to this schema:
 {
   "action": "READ" | "WRITE" | "UPDATE" | "DELETE" | "EXECUTE" | "EXPORT" | "DOWNLOAD" | "PRIVILEGE_ESCALATION" | "EXTERNAL_REQUEST",
-  "resource": "identifier of the target document, codebase, or cluster",
-  "resourceType": "document" | "source_code" | "report" | "financial_record" | "admin_config" | "database",
-  "scope": "project.read" | "source.read" | "project.write" | "finance.read" | "admin.read" | "db.admin.destroy",
+  "tool": "get_customer" | "get_order" | "update_order" | "issue_refund" | "request_admin_access" | "delete_customer",
+  "resource": "identifier of target customer, order, financial record, or cluster",
+  "resourceType": "customer_record" | "order_record" | "financial_transaction" | "document" | "database",
+  "scope": "customer.read" | "order.read" | "order.write" | "finance.refund" | "admin.escalate" | "customer.delete",
   "sensitivity": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
   "reversibility": "REVERSIBLE" | "PARTIALLY_REVERSIBLE" | "IRREVERSIBLE",
   "reason": "Clear justification explaining why this action is required for your task"

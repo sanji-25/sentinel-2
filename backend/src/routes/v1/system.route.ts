@@ -250,7 +250,7 @@ router.post('/gemini-run', async (req: Request, res: Response, next: NextFunctio
       session,
       mode: isLive ? 'LIVE_GEMINI' : 'DEMO_MODE',
       modeLabel: isLive ? 'LIVE GEMINI MODE' : 'DEMO MODE',
-      modelName: isLive ? 'gemini-1.5-flash' : 'Deterministic Simulation',
+      modelName: isLive ? (process.env.GEMINI_MODEL || 'gemini-3.8-flash') : 'Deterministic Simulation',
       steps: stepResults,
       finalDecision: stepResults[stepResults.length - 1]?.decision || 'ALLOW',
       halted,

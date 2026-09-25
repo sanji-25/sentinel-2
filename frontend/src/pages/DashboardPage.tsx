@@ -12,8 +12,9 @@ import { InterventionsView } from '../features/interventions/InterventionsView';
 import { ScenarioLabView } from '../features/scenarios/ScenarioLabView';
 import { EvaluationView } from '../features/evaluation/EvaluationView';
 import { LiveAgentView } from '../features/live-agent/LiveAgentView';
+import { CounterfactualSimulationView } from '../features/simulations/CounterfactualSimulationView';
 
-const CONTENT_TABS = ['agents', 'sessions', 'actions', 'audit', 'trajectory', 'interventions', 'scenarios', 'evaluation', 'live-agent'] as const;
+const CONTENT_TABS = ['agents', 'sessions', 'actions', 'audit', 'trajectory', 'interventions', 'simulations', 'scenarios', 'evaluation', 'live-agent'] as const;
 
 export const DashboardPage: React.FC = () => {
   const { isSimple } = useMode();
@@ -27,6 +28,7 @@ export const DashboardPage: React.FC = () => {
       {activeTab === 'audit' && <AuditTrailView />}
       {activeTab === 'trajectory' && <TrajectoryView />}
       {activeTab === 'interventions' && <InterventionsView />}
+      {activeTab === 'simulations' && <CounterfactualSimulationView />}
       {activeTab === 'scenarios' && <ScenarioLabView />}
       {activeTab === 'evaluation' && <EvaluationView />}
       {activeTab === 'live-agent' && <LiveAgentView />}

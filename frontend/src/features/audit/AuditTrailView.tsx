@@ -76,9 +76,17 @@ export const AuditTrailView: React.FC = () => {
           color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40'
         };
       case 'ACTION_BLOCKED':
+      case 'RATE_LIMIT_TRIGGERED':
+      case 'REQUEST_THROTTLED':
         return {
           icon: Lock,
           color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40'
+        };
+      case 'BURST_DETECTED':
+      case 'DUPLICATE_DETECTED':
+        return {
+          icon: AlertTriangle,
+          color: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40'
         };
       case 'ACTION_INGESTED':
       default:

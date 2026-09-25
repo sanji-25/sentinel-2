@@ -174,6 +174,10 @@ export function validateProposedAction(rawInput: unknown): ProposedAction {
     sensitivity: sensitivityNormalized,
     reversibility: reversibilityNormalized,
     reason,
+    tool: typeof parsed.tool === 'string' ? parsed.tool : undefined,
+    toolParams: typeof parsed.toolParams === 'object' && parsed.toolParams !== null && !Array.isArray(parsed.toolParams)
+      ? (parsed.toolParams as Record<string, unknown>)
+      : undefined,
     rawModelOutput: typeof rawInput === 'string' ? rawInput : JSON.stringify(rawInput)
   };
 }

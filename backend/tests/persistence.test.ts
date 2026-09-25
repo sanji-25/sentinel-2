@@ -187,6 +187,9 @@ describe('Repository Persistence & Survivability', () => {
     });
 
     it('persists audit trail append-only across re-instantiation', async () => {
+      if (fs.existsSync(testAuditFile)) {
+        try { fs.unlinkSync(testAuditFile); } catch {}
+      }
       const auditRepo1 = new LocalAuditLogRepository();
       await auditRepo1.append({
         id: 'aud-survive-1',

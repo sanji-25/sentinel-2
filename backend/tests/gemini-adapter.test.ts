@@ -33,11 +33,7 @@ describe('Gemini Sentinel Adapter & Runtime Governance (Phase 7)', () => {
     });
   });
 
-  beforeEach(async () => {
-    if (agentRepository.clear) await agentRepository.clear();
-    if (sessionRepository.clear) await sessionRepository.clear();
-    if (actionEventRepository.clear) await actionEventRepository.clear();
-  });
+
 
   it('1. Gemini adapter can initialize session and register agent', async () => {
     const adapter = new GeminiSentinelAdapter({
@@ -238,5 +234,168 @@ describe('Gemini Sentinel Adapter & Runtime Governance (Phase 7)', () => {
 
     expect(runner.getModeLabel()).toBe('DEMO MODE');
     expect(runner.isLiveGemini()).toBe(false);
+  });
+
+  it('12. POST /api/v1/agents/gemini/session establishes a governed session for Gemini agent', async () => {
+    const res = await fetch(`${baseUrl}/agents/gemini/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task: 'Financial audit of customer accounts',
+        principal: 'gemini-auditor@external.sentinel',
+        scopes: ['finance.read', 'project.write']
+      })
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.sessionId).toBeDefined();
+    expect(body.agentId).toBeDefined();
+    expect(body.status).toBe('ACTIVE');
+    expect(body.trajectory).toBeDefined();
+    expect(body.trajectory.currentRisk).toBe(0);
+    expect(Array.isArray(body.actions)).toBe(true);
+  });
+
+  it('13. POST /api/v1/agents/:agentId/actions intercepts action proposal and returns policy decision', async () => {
+    // First create session
+    const sessRes = await fetch(`${baseUrl}/agents/gemini/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task: 'Financial audit',
+        scopes: ['finance.read', 'project.write']
+      })
+    });
+    const { sessionId, agentId } = await sessRes.json();
+
+    // Propose an authorized action
+    const actRes = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'READ',
+        resource: 'finance/customer-ledger',
+        scope: 'finance.read',
+        sensitivity: 'LOW',
+        reversibility: 'REVERSIBLE'
+      })
+    });
+
+    expect(actRes.status).toBe(200);
+    const actBody = await actRes.json();
+    expect(actBody.decision).toBe('ALLOW');
+    expect(actBody.risk).toBeDefined();
+    expect(actBody.event).toBeDefined();
+    expect(actBody.event.resource).toBe('finance/customer-ledger');
+  });
+
+  it('14. Governs Financial Audit workflow from ALLOW through CONFIRM to BLOCK', async () => {
+    const sessRes = await fetch(`${baseUrl}/agents/gemini/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task: 'Financial audit of customer accounts',
+        scopes: ['finance.read', 'project.write']
+      })
+    });
+    const { sessionId, agentId } = await sessRes.json();
+
+    // 1. READ customer ledger -> ALLOW
+    const step1 = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'READ',
+        resource: 'finance/customer-ledger',
+        scope: 'finance.read',
+        sensitivity: 'LOW',
+        reversibility: 'REVERSIBLE'
+      })
+    });
+    const step1Body = await step1.json();
+    expect(step1Body.decision).toBe('ALLOW');
+
+    // 2. READ transaction records -> ALLOW
+    const step2 = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'READ',
+        resource: 'finance/transaction-records',
+        scope: 'finance.read',
+        sensitivity: 'MEDIUM',
+        reversibility: 'REVERSIBLE'
+      })
+    });
+    const step2Body = await step2.json();
+    expect(['ALLOW', 'MONITOR']).toContain(step2Body.decision);
+
+    // 3. WRITE audit report -> MONITOR / ALLOW
+    const step3 = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'WRITE',
+        resource: 'project/report',
+        scope: 'project.write',
+        sensitivity: 'MEDIUM',
+        reversibility: 'REVERSIBLE'
+      })
+    });
+    const step3Body = await step3.json();
+    expect(['ALLOW', 'MONITOR']).toContain(step3Body.decision);
+
+    // 4. READ unrelated HR records (unauthorized scope employee.hr.admin) -> CONFIRM
+    const step4 = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'READ',
+        resource: 'employee/unrelated-hr-records',
+        scope: 'employee.hr.admin',
+        sensitivity: 'HIGH',
+        reversibility: 'REVERSIBLE'
+      })
+    });
+    const step4Body = await step4.json();
+    expect(step4Body.decision).toBe('CONFIRM');
+
+    // Human operator approves once
+    const pendingInterventions = await (await fetch(`${baseUrl}/interventions?status=PENDING`)).json();
+    const targetIntervention = (pendingInterventions.data || pendingInterventions.interventions || [])
+      .find((p: { sessionId: string }) => p.sessionId === sessionId);
+    if (targetIntervention) {
+      await fetch(`${baseUrl}/interventions/${targetIntervention.id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decision: 'ALLOW_ONCE',
+          reviewerId: 'audit-officer',
+          reason: 'Authorized one-time HR audit verification'
+        })
+      });
+    }
+
+    // 5. DELETE temporary files (unauthorized scope system.delete, irreversible) -> BLOCK
+    const step5 = await fetch(`${baseUrl}/agents/${agentId}/actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        action: 'DELETE',
+        resource: 'production/temporary-files',
+        scope: 'system.delete',
+        sensitivity: 'HIGH',
+        reversibility: 'IRREVERSIBLE'
+      })
+    });
+    const step5Body = await step5.json();
+    expect(step5Body.decision).toBe('BLOCK');
   });
 });

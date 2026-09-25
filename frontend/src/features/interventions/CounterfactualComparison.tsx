@@ -1,6 +1,7 @@
 import React from 'react';
 import { CounterfactualAnalysis } from '@sentinel/shared';
-import { ShieldCheck, Sparkles, AlertOctagon, HelpCircle } from 'lucide-react';
+import { ShieldCheck, Sparkles, AlertOctagon, HelpCircle, GitFork } from 'lucide-react';
+import { useNavigation } from '../../stores/navigationContext';
 
 interface CounterfactualComparisonProps {
   counterfactual?: CounterfactualAnalysis;
@@ -11,6 +12,8 @@ export const CounterfactualComparison: React.FC<CounterfactualComparisonProps> =
   counterfactual,
   className = ''
 }) => {
+  const { setActiveTab } = useNavigation();
+
   if (!counterfactual) {
     return null;
   }
@@ -58,6 +61,14 @@ export const CounterfactualComparison: React.FC<CounterfactualComparisonProps> =
             Evaluating trade-offs across premature disruption, optimal intervention, and delayed breach.
           </p>
         </div>
+
+        <button
+          onClick={() => setActiveTab('simulations')}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/30 transition-all shadow-sm"
+        >
+          <GitFork className="w-3.5 h-3.5" />
+          <span>Interactive Simulator ↗</span>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -17,11 +17,13 @@ import { PolicyDecisionService, policyDecisionService } from '../decisions/polic
 import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
 import { TrajectoryService, trajectoryService as defaultTrajectoryService } from '../trajectory/service.js';
 import { InterventionService, interventionService as defaultInterventionService } from '../intervention/service.js';
+import { SpamGuardService, spamGuardService as defaultSpamGuard } from '../spam-guard/index.js';
 import {
   ValidationError,
   NotFoundError,
   ForbiddenError,
-  BadRequestError
+  BadRequestError,
+  ThrottledError
 } from '../../middleware/errorHandler.js';
 
 const VALID_ACTIONS: Set<string> = new Set([
@@ -58,7 +60,8 @@ export class ActionIngestionService {
     private policyService: PolicyDecisionService = policyDecisionService,
     private audit: AuditService = defaultAuditService,
     private trajectoryService: TrajectoryService = defaultTrajectoryService,
-    private interventionService: InterventionService = defaultInterventionService
+    private interventionService: InterventionService = defaultInterventionService,
+    private spamGuard: SpamGuardService = defaultSpamGuard
   ) {}
 
   public setRepositories(
@@ -67,7 +70,8 @@ export class ActionIngestionService {
     sessionRepo?: SessionRepository,
     audit?: AuditService,
     trajectoryService?: TrajectoryService,
-    interventionService?: InterventionService
+    interventionService?: InterventionService,
+    spamGuard?: SpamGuardService
   ): void {
     this.actionRepo = actionRepo;
     if (agentRepo) this.agentRepo = agentRepo;
@@ -75,6 +79,15 @@ export class ActionIngestionService {
     if (audit) this.audit = audit;
     if (trajectoryService) this.trajectoryService = trajectoryService;
     if (interventionService) this.interventionService = interventionService;
+    if (spamGuard) this.spamGuard = spamGuard;
+  }
+
+  public setSpamGuardService(spamGuard: SpamGuardService): void {
+    this.spamGuard = spamGuard;
+  }
+
+  public getSpamGuardService(): SpamGuardService {
+    return this.spamGuard;
   }
 
   async ingestAction(input: IngestActionInput, requestId = '-'): Promise<IngestActionResult> {
@@ -146,6 +159,29 @@ export class ActionIngestionService {
       );
     }
 
+    // 8b. Spam / Abuse Guard Check (Rate Limit, Burst Detection, Duplicate Detection)
+    // Sits BEFORE expensive downstream processing (Agent/Session DB queries, Trajectory, Risk)
+    const spamCheck = await this.spamGuard.check({
+      agentId,
+      sessionId,
+      action: normalizedAction,
+      resource,
+      tool: (input.metadata?.tool as string) || undefined,
+      toolParams: (input.metadata?.toolParams as Record<string, unknown>) || undefined
+    });
+
+    if (spamCheck.throttled) {
+      throw new ThrottledError(
+        spamCheck.reason || 'Request rate limit exceeded. Please retry later.',
+        {
+          requestRate: spamCheck.signals.requestRate,
+          threshold: spamCheck.signals.threshold,
+          windowMs: spamCheck.signals.windowMs,
+          status: spamCheck.signals.status
+        }
+      );
+    }
+
     // 9. Verify Agent exists and is ACTIVE
     const agent = await this.agentRepo.findById(agentId);
     if (!agent) {
@@ -206,7 +242,10 @@ export class ActionIngestionService {
       sensitivity: normalizedSensitivity,
       reversibility: normalizedReversibility,
       authorization,
-      metadata: input.metadata || {}
+      metadata: {
+        ...(input.metadata || {}),
+        spamSignals: spamCheck.signals
+      }
     };
 
     // 14. Evaluate Trajectory Features, Deviation, and Cumulative Risk
@@ -241,7 +280,8 @@ export class ActionIngestionService {
       interventionUrgency: interventionAnalysis.urgency,
       predictedRisk: interventionAnalysis.predictedRisk,
       forecast: interventionAnalysis.forecast,
-      counterfactual: interventionAnalysis.counterfactual
+      counterfactual: interventionAnalysis.counterfactual,
+      spamSignals: spamCheck.signals
     };
 
     // 15. Record Action Event
@@ -266,7 +306,8 @@ export class ActionIngestionService {
       interventionUrgency: interventionAnalysis.urgency,
       predictedRisk: interventionAnalysis.predictedRisk,
       forecast: interventionAnalysis.forecast,
-      counterfactual: interventionAnalysis.counterfactual
+      counterfactual: interventionAnalysis.counterfactual,
+      spamSignals: spamCheck.signals
     };
     await this.sessionRepo.update(session);
 

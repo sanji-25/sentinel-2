@@ -74,6 +74,24 @@ export function calculateBaseActionRisk(action: ActionEvent): number {
     score += 15;
   }
 
+  // 5. Spam / Abuse Signals Contribution (Burst / Repeated Actions)
+  const spamSignals = action.metadata?.spamSignals as import('@sentinel/shared').SpamSignals | undefined;
+  if (spamSignals) {
+    if (spamSignals.burstDetected) {
+      score += 15;
+    }
+    if (spamSignals.duplicateDetected && (spamSignals.duplicateCount ?? 0) >= 2) {
+      const isSensitiveOrDestructive =
+        action.sensitivity === 'HIGH' ||
+        action.sensitivity === 'CRITICAL' ||
+        action.action === 'DELETE' ||
+        action.action === 'EXECUTE';
+      score += isSensitiveOrDestructive
+        ? Math.min(30, spamSignals.duplicateCount * 10)
+        : Math.min(15, spamSignals.duplicateCount * 5);
+    }
+  }
+
   return Math.min(100, Math.max(0, score));
 }
 

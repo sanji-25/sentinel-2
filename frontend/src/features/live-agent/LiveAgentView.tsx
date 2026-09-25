@@ -14,8 +14,10 @@ import {
   Ban,
   Activity,
   TrendingUp,
-  Zap
+  Zap,
+  ShieldAlert
 } from 'lucide-react';
+import { SpamSignals } from '@sentinel/shared';
 
 interface ProposedAction {
   action: string;
@@ -50,8 +52,19 @@ interface ControlledStepResult {
     risk: string;
     actionRecommendation: string;
   };
+  tool?: string;
+  toolExecutionState?: 'SUCCESS' | 'WAITING_FOR_HUMAN_APPROVAL' | 'BLOCKED_NOT_EXECUTED' | 'DENIED_NOT_EXECUTED';
+  toolResult?: unknown;
+  preventionProof?: string;
   executed: boolean;
   halted: boolean;
+  spamSignals?: SpamSignals;
+}
+
+interface CustomerStoreState {
+  customers: Array<{ id: string; name: string; email: string; status: string; balance: number; tier: string }>;
+  orders: Array<{ id: string; customerId: string; amount: number; status: string; refundIssued: boolean; refundAmount?: number; notes?: string }>;
+  adminRequests: Array<{ id: string; agentId: string; targetRole: string; justification: string; granted: boolean }>;
 }
 
 interface ProviderStatusData {
@@ -64,7 +77,13 @@ interface ProviderStatusData {
 }
 
 const SCENARIOS = [
+  {
+    id: 'GEMINI_CUSTOMER_SUPPORT',
+    name: 'Customer Support Tool Execution (Protected Gateway)',
+    description: 'Gemini Support Agent requesting protected tools (get_customer, get_order, update_order, issue_refund, request_admin_access, delete_customer) with complete Sentinel decision gating.'
+  },
   { id: 'GEMINI_SCOPE_CREEP', name: 'Scope Creep Escalation', description: 'Agent drifts from safe docs into executive financial records' },
+  { id: 'GEMINI_FINANCIAL_AUDIT', name: 'Financial Audit Workflow', description: 'Financial audit task escalating to unauthorized HR access and deletion' },
   { id: 'GEMINI_NORMAL', name: 'Normal Research', description: 'Routine documentation analysis, 100% authorized and safe' },
   { id: 'GEMINI_SENSITIVE_ACCESS', name: 'Sensitive Data Spike', description: 'Abrupt request to export confidential customer PII vault' },
   { id: 'GEMINI_PRIVILEGE_ESCALATION', name: 'Privilege Escalation', description: 'Unauthorized attempt to claim super-admin IAM role' },
@@ -75,7 +94,8 @@ const SCENARIOS = [
 export const LiveAgentView: React.FC = () => {
   const { isSimple } = useMode();
   const [providerStatus, setProviderStatus] = useState<ProviderStatusData | null>(null);
-  const [selectedScenario, setSelectedScenario] = useState<string>('GEMINI_SCOPE_CREEP');
+  const [customerStore, setCustomerStore] = useState<CustomerStoreState | null>(null);
+  const [selectedScenario, setSelectedScenario] = useState<string>('GEMINI_CUSTOMER_SUPPORT');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [sessionStatus, setSessionStatus] = useState<'IDLE' | 'LIVE' | 'PAUSED' | 'BLOCKED' | 'COMPLETED'>('IDLE');
@@ -85,6 +105,19 @@ export const LiveAgentView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
   const streamEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch customer store state
+  const fetchCustomerStore = async () => {
+    try {
+      const res = await fetch('/api/v1/tools/customer-store');
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerStore(data.data || data);
+      }
+    } catch {
+      // Ignored
+    }
+  };
 
   // Fetch provider status
   const fetchStatus = async () => {
@@ -101,6 +134,7 @@ export const LiveAgentView: React.FC = () => {
 
   useEffect(() => {
     fetchStatus();
+    fetchCustomerStore();
   }, []);
 
   // Scroll to latest step in stream
@@ -153,6 +187,7 @@ export const LiveAgentView: React.FC = () => {
         const stepData: ControlledStepResult = await stepRes.json();
         setSteps((prev) => [...prev, stepData]);
         setSelectedStepIndex(stepNum - 1);
+        await fetchCustomerStore();
 
         if (stepData.decision === 'CONFIRM') {
           currentStatus = 'PAUSED';
@@ -198,11 +233,23 @@ export const LiveAgentView: React.FC = () => {
 
       if (!res.ok) throw new Error(`Decision submission failed: HTTP ${res.status}`);
 
+      // Refresh customer store immediately after human decision
+      await fetchCustomerStore();
+
       // Update local step with decision
       setSteps((prev) => {
         const copy = [...prev];
         const last = copy[copy.length - 1];
-        if (last) last.humanDecision = decision;
+        if (last) {
+          last.humanDecision = decision;
+          if (decision === 'ALLOW_ONCE') {
+            last.executed = true;
+            last.toolExecutionState = 'SUCCESS';
+          } else {
+            last.executed = false;
+            last.toolExecutionState = 'DENIED_NOT_EXECUTED';
+          }
+        }
         return copy;
       });
 
@@ -221,6 +268,7 @@ export const LiveAgentView: React.FC = () => {
               const nextStepData: ControlledStepResult = await nextStepRes.json();
               setSteps((prev) => [...prev, nextStepData]);
               setSelectedStepIndex(steps.length);
+              await fetchCustomerStore();
               setSessionStatus(nextStepData.decision === 'BLOCK' ? 'BLOCKED' : 'COMPLETED');
             }
           } catch {
@@ -321,10 +369,10 @@ export const LiveAgentView: React.FC = () => {
             </h1>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-slate-600 dark:text-slate-400 font-medium">
-              <div>Agent: <span className="text-slate-900 dark:text-slate-100 font-semibold">Gemini Research Agent {agentId ? `(${agentId})` : ''}</span></div>
+              <div>Agent: <span className="text-slate-900 dark:text-slate-100 font-semibold">{selectedScenario === 'GEMINI_CUSTOMER_SUPPORT' ? 'Gemini Support Agent' : 'Gemini Research Agent'} {agentId ? `(${agentId})` : ''}</span></div>
               <div>Provider: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{providerStatus?.providerName || 'Google Gemini'}</span></div>
-              <div>Model: <span className="text-slate-900 dark:text-slate-100 font-mono font-semibold">{providerStatus?.modelName || 'gemini-1.5-flash'}</span></div>
-              <div>Task: <span className="text-slate-900 dark:text-slate-100 italic">Research project information</span></div>
+              <div>Model: <span className="text-slate-900 dark:text-slate-100 font-mono font-semibold">{providerStatus?.modelName || 'gemini-3.8-flash'}</span></div>
+              <div>Task: <span className="text-slate-900 dark:text-slate-100 italic">{selectedScenario === 'GEMINI_CUSTOMER_SUPPORT' ? 'Customer service & order triage' : 'Research project information'}</span></div>
             </div>
           </div>
 
@@ -536,11 +584,97 @@ export const LiveAgentView: React.FC = () => {
         </div>
       )}
 
+      {/* Spam & Abuse Protection Card */}
+      <div className="card-tactile p-4 border-slate-200 dark:border-slate-800 bg-surface-50/40 dark:bg-surface-900/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-indigo-500" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Spam Protection
+            </h2>
+            <span className="text-[10px] text-slate-400 font-mono">
+              // Pre-Ingestion Guard Layer
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Request Rate:{' '}
+              <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                {currentStep?.spamSignals
+                  ? `${currentStep.spamSignals.requestRate} req/window`
+                  : currentStep
+                  ? '1 req/window'
+                  : '0 req/window'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Status:</span>
+              {(() => {
+                const status = currentStep?.spamSignals?.status || (sessionStatus === 'BLOCKED' ? 'BLOCKED' : 'NORMAL');
+                const badgeColor =
+                  status === 'BLOCKED' || status === 'THROTTLED'
+                    ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                    : status === 'WARNING'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+                return (
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeColor}`}>
+                    {status}
+                  </span>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        {/* Signals */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-200/60 dark:border-slate-800/60 text-xs">
+          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/80 dark:border-slate-700/60">
+            <span className="text-[11px] text-slate-600 dark:text-slate-400">Burst detected</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+              currentStep?.spamSignals?.burstDetected
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                : 'text-slate-400 font-normal'
+            }`}>
+              {currentStep?.spamSignals?.burstDetected ? 'YES' : 'NO'}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/80 dark:border-slate-700/60">
+            <span className="text-[11px] text-slate-600 dark:text-slate-400">Duplicate detected</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+              currentStep?.spamSignals?.duplicateDetected
+                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                : 'text-slate-400 font-normal'
+            }`}>
+              {currentStep?.spamSignals?.duplicateDetected
+                ? `YES (${currentStep.spamSignals.duplicateCount}x)`
+                : 'NO'}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/80 dark:border-slate-700/60">
+            <span className="text-[11px] text-slate-600 dark:text-slate-400">Rate limit exceeded</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+              currentStep?.spamSignals?.rateLimitExceeded
+                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                : 'text-slate-400 font-normal'
+            }`}>
+              {currentStep?.spamSignals?.rateLimitExceeded ? 'EXCEEDED' : 'NOMINAL'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Telemetry KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3">
         <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Agent</span>
-          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block mt-1">Gemini</span>
+          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate block mt-1">
+            {selectedScenario === 'GEMINI_CUSTOMER_SUPPORT' ? 'Gemini Support Agent' : 'Gemini Research Agent'}
+          </span>
         </div>
 
         <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
@@ -551,9 +685,16 @@ export const LiveAgentView: React.FC = () => {
         </div>
 
         <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Action</span>
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Current Action</span>
           <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 truncate block mt-1">
-            {currentStep?.proposedAction.action || '—'}
+            {currentStep?.tool || currentStep?.proposedAction.action || '—'}
+          </span>
+        </div>
+
+        <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Decision</span>
+          <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold border ${getDecisionBadge(currentStep?.decision || 'ALLOW')}`}>
+            {currentStep?.decision || 'STANDBY'}
           </span>
         </div>
 
@@ -570,6 +711,40 @@ export const LiveAgentView: React.FC = () => {
         </div>
 
         <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Intervention</span>
+          <span className={`text-xs font-bold block mt-1 ${
+            currentStep?.interventionWindow === 'OPTIMAL_WINDOW' ? 'text-amber-500' : 'text-slate-900 dark:text-slate-100'
+          }`}>
+            {currentStep?.interventionWindow || 'SAFE'}
+          </span>
+        </div>
+
+        <div className="card-tactile p-3 border-slate-200 dark:border-slate-800 xl:col-span-1">
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Tool Execution</span>
+          <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold border ${
+            (currentStep?.toolExecutionState === 'WAITING_FOR_HUMAN_APPROVAL' || (sessionStatus === 'PAUSED' && currentStep?.decision === 'CONFIRM'))
+              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-pulse'
+              : (currentStep?.toolExecutionState === 'SUCCESS' || (currentStep?.executed && currentStep?.decision !== 'BLOCK'))
+              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+              : (currentStep?.toolExecutionState === 'BLOCKED_NOT_EXECUTED' || currentStep?.decision === 'BLOCK')
+              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+              : (currentStep?.toolExecutionState === 'DENIED_NOT_EXECUTED')
+              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700'
+          }`}>
+            {(currentStep?.toolExecutionState === 'WAITING_FOR_HUMAN_APPROVAL' || (sessionStatus === 'PAUSED' && currentStep?.decision === 'CONFIRM'))
+              ? 'WAITING FOR HUMAN APPROVAL'
+              : (currentStep?.toolExecutionState === 'SUCCESS' || (currentStep?.executed && currentStep?.decision !== 'BLOCK'))
+              ? 'SUCCESS'
+              : (currentStep?.toolExecutionState === 'BLOCKED_NOT_EXECUTED' || currentStep?.decision === 'BLOCK')
+              ? 'BLOCKED — NOT EXECUTED'
+              : (currentStep?.toolExecutionState === 'DENIED_NOT_EXECUTED')
+              ? 'DENIED — NOT EXECUTED'
+              : 'STANDBY'}
+          </span>
+        </div>
+
+        <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Deviation</span>
           <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block mt-1">
             {currentStep?.trajectoryDeviation ?? 0}%
@@ -577,25 +752,9 @@ export const LiveAgentView: React.FC = () => {
         </div>
 
         <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Risk Delta</span>
-          <span className={`text-xs font-bold block mt-1 ${
-            (currentStep?.riskDelta ?? 0) > 0 ? 'text-amber-500' : 'text-slate-900 dark:text-slate-100'
-          }`}>
-            {(currentStep?.riskDelta ?? 0) > 0 ? `+${currentStep?.riskDelta}` : currentStep?.riskDelta ?? 0}
-          </span>
-        </div>
-
-        <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Predicted Risk</span>
           <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 block mt-1">
             {currentStep?.predictedNextRisk ?? 0}
-          </span>
-        </div>
-
-        <div className="card-tactile p-3 border-slate-200 dark:border-slate-800">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Decision</span>
-          <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold border ${getDecisionBadge(currentStep?.decision || 'ALLOW')}`}>
-            {currentStep?.decision || 'STANDBY'}
           </span>
         </div>
       </div>
@@ -766,6 +925,75 @@ export const LiveAgentView: React.FC = () => {
               </text>
             )}
           </svg>
+        </div>
+      </div>
+
+      {/* Live Simulated Customer & Order Data Store Panel */}
+      <div className="card-tactile p-4 border-slate-200 dark:border-slate-800 bg-surface-50/50 dark:bg-surface-900/50 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Simulated Customer & Order Data Store // Live In-Memory State
+            </h3>
+          </div>
+          <span className="text-[11px] font-mono text-slate-400">
+            Resource Isolation: Zero Direct Tool Authority for Gemini
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Customer Record */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-surface-primary dark:bg-surface-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                Customer: {customerStore?.customers[0]?.id || 'CUST-001'}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                customerStore?.customers[0]?.status === 'ACTIVE'
+                  ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
+                  : 'bg-rose-500/10 text-rose-600 border border-rose-500/30'
+              }`}>
+                Status: {customerStore?.customers[0]?.status || 'ACTIVE'}
+              </span>
+            </div>
+            <div className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+              <div>Name: <span className="font-semibold">{customerStore?.customers[0]?.name || 'Acme Corp / Sarah Chen'}</span></div>
+              <div>Tier: <span className="font-mono text-slate-500">{customerStore?.customers[0]?.tier || 'ENTERPRISE'}</span> | Balance: <span className="font-mono font-semibold">${customerStore?.customers[0]?.balance?.toFixed(2) || '4500.00'}</span></div>
+            </div>
+            {currentStep?.tool === 'delete_customer' && (
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-700 text-[11px] font-mono text-rose-600 dark:text-rose-400 font-bold">
+                🛡️ Sentinel Prevented Permanent Deletion — Customer Profile Remains ACTIVE
+              </div>
+            )}
+          </div>
+
+          {/* Order Record */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-surface-primary dark:bg-surface-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                Order: {customerStore?.orders[0]?.id || 'ORD-1001'}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                customerStore?.orders[0]?.status === 'REFUNDED'
+                  ? 'bg-amber-500/10 text-amber-600 border border-amber-500/30'
+                  : 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
+              }`}>
+                Status: {customerStore?.orders[0]?.status || 'DELIVERED'}
+              </span>
+            </div>
+            <div className="text-xs text-slate-700 dark:text-slate-300 font-medium">
+              <div>Amount: <span className="font-mono font-semibold">${customerStore?.orders[0]?.amount?.toFixed(2) || '350.00'}</span> | Refund Issued: <span className={`font-bold ${customerStore?.orders[0]?.refundIssued ? 'text-amber-500' : 'text-slate-500'}`}>{customerStore?.orders[0]?.refundIssued ? 'YES (Approved by Human Operator)' : 'NO'}</span></div>
+              {customerStore?.orders[0]?.notes && (
+                <div className="text-[11px] text-slate-500 truncate">Notes: {customerStore?.orders[0]?.notes}</div>
+              )}
+            </div>
+            {currentStep?.tool === 'issue_refund' && sessionStatus === 'PAUSED' && (
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-700 text-[11px] font-mono text-amber-600 dark:text-amber-400 font-bold animate-pulse">
+                ⏳ Tool Execution Held — Awaiting Human Approval before refunding $350.00
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -952,11 +1180,40 @@ export const LiveAgentView: React.FC = () => {
                 </div>
               )}
 
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-semibold">
-                <span className="text-slate-500">Execution Status:</span>
-                <span className={currentStep.executed ? 'text-emerald-500' : 'text-rose-500'}>
-                  {currentStep.executed ? 'EXECUTED (GOVERNED)' : 'TERMINATED (BLOCKED)'}
-                </span>
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-1.5 text-xs font-semibold">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Tool Execution:</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    (currentStep.toolExecutionState === 'WAITING_FOR_HUMAN_APPROVAL' || (!currentStep.executed && currentStep.decision === 'CONFIRM'))
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse'
+                      : (currentStep.toolExecutionState === 'SUCCESS' || currentStep.executed)
+                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                  }`}>
+                    {(currentStep.toolExecutionState === 'WAITING_FOR_HUMAN_APPROVAL' || (!currentStep.executed && currentStep.decision === 'CONFIRM'))
+                      ? 'WAITING FOR HUMAN APPROVAL'
+                      : (currentStep.toolExecutionState === 'SUCCESS' || currentStep.executed)
+                      ? 'SUCCESS'
+                      : currentStep.toolExecutionState === 'DENIED_NOT_EXECUTED'
+                      ? 'DENIED — NOT EXECUTED'
+                      : 'BLOCKED — NOT EXECUTED'}
+                  </span>
+                </div>
+
+                {currentStep.preventionProof && (
+                  <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] font-mono text-rose-600 dark:text-rose-400 font-bold">
+                    🛡️ {currentStep.preventionProof}
+                  </div>
+                )}
+
+                {currentStep.toolResult !== undefined && currentStep.toolResult !== null && (
+                  <div className="mt-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-850 border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 font-mono uppercase block mb-1">Simulated Tool Return:</span>
+                    <pre className="text-[10px] font-mono text-slate-700 dark:text-slate-300 overflow-x-auto max-h-24">
+                      {JSON.stringify(currentStep.toolResult, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

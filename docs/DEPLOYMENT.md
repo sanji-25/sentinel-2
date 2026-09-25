@@ -69,6 +69,11 @@ STEP 9  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST
 | `GEMINI_MODEL` | No | `gemini-1.5-flash` | Model name |
 | `DEMO_MODE` | No | `false` | `true` forces deterministic mock agent |
 | `JWT_SECRET` | No | — | Reserved for future auth middleware |
+| `SPAM_RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit sliding window (ms) |
+| `SPAM_RATE_LIMIT_MAX_REQUESTS` | No | `100` | Max requests per agent/session per window |
+| `SPAM_BURST_WINDOW_MS` | No | `5000` | Burst detection window (ms) |
+| `SPAM_BURST_MAX_REQUESTS` | No | `15` | Max requests within burst window |
+| `SPAM_DUPLICATE_WINDOW_MS` | No | `30000` | Duplicate action replay detection window (ms) |
 
 ### Frontend Variables — PUBLIC (VITE_ prefix, safe for browser bundle)
 
@@ -113,11 +118,14 @@ This ensures React Router handles all client-side routes.
 
 ## 4. Backend Deployment — Render
 
-### Build command
+### Build & Start Commands (Monorepo Root)
+```bash
+# Build Command
+npm ci && npm run build:shared && npm run build:backend
+
+# Start Command
+node backend/dist/server.js
 ```
-npm ci && npm run build
-```
-Start command: `node dist/server.js`
 
 ### Steps (Render Dashboard)
 
@@ -125,38 +133,30 @@ Start command: `node dist/server.js`
 2. Connect your GitHub repository
 3. Configure the service:
    - **Name:** `sentinel-api`
-   - **Root Directory:** `backend`
-   - **Build Command:** `npm ci && npm run build`
-   - **Start Command:** `node dist/server.js`
+   - **Root Directory:** *(leave blank — repository root)*
+   - **Build Command:** `npm ci && npm run build:shared && npm run build:backend`
+   - **Start Command:** `node backend/dist/server.js`
    - **Node Version:** `20.x` or later
    - **Health Check Path:** `/api/health`
 4. Add all backend environment variables (Section 2)
 5. Deploy
 
-### render.yaml (optional — place at repo root)
+### render.yaml (Infrastructure as Code — located at repo root)
 
 ```yaml
 services:
   - type: web
     name: sentinel-api
     runtime: node
-    rootDir: backend
-    buildCommand: npm ci && npm run build
-    startCommand: node dist/server.js
+    buildCommand: npm ci && npm run build:shared && npm run build:backend
+    startCommand: node backend/dist/server.js
     healthCheckPath: /api/health
+    autoDeploy: false
     envVars:
       - key: NODE_ENV
         value: production
-      - key: CORS_ORIGIN
-        sync: false
       - key: STORAGE_DRIVER
         value: supabase
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
       - key: GEMINI_MODEL
         value: gemini-1.5-flash
       - key: DEMO_MODE

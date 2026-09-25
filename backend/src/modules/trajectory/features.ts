@@ -108,6 +108,10 @@ export function extractTrajectoryFeatures(
     const ratePerMinute = totalCount / durationMinutes;
     actionVelocity = Math.min(100, Math.round((ratePerMinute / baseline.maxAcceptableVelocityPerMinute) * 50));
   }
+  const spamSignals = currentAction.metadata?.spamSignals as import('@sentinel/shared').SpamSignals | undefined;
+  if (spamSignals?.burstDetected) {
+    actionVelocity = Math.max(actionVelocity, 80);
+  }
 
   // 7. Resource Diversity (0 - 100)
   const uniqueTypes = new Set(allActions.map((a) => a.resourceType.toLowerCase())).size;

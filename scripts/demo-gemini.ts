@@ -69,7 +69,8 @@ async function main() {
   const scenarioId = scenarioArg ? scenarioArg.split('=')[1] : (process.env.SCENARIO || 'GEMINI_SCOPE_CREEP');
 
   const isLive = !isForceMock && hasKey;
-  const providerLabel = isLive ? 'Google Gemini (gemini-1.5-flash)' : 'Deterministic Mock Provider';
+  const configuredModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const providerLabel = isLive ? `Google Gemini (${configuredModel})` : 'Deterministic Mock Provider';
   const modeTag = isLive ? 'LIVE GEMINI MODE' : 'MOCK PROVIDER DEMO MODE';
 
   console.log(`
