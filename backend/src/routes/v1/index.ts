@@ -6,6 +6,7 @@ import { auditRouter } from './audit.route.js';
 import { systemRouter } from './system.route.js';
 import { scenariosRouter } from './scenarios.route.js';
 import { interventionsRouter } from './interventions.route.js';
+import { evaluationRouter } from './evaluation.route.js';
 
 const v1Router = Router();
 
@@ -16,5 +17,6 @@ v1Router.use('/audit', auditRouter);
 v1Router.use('/system', systemRouter);
 v1Router.use('/scenarios', scenariosRouter);
 v1Router.use('/interventions', interventionsRouter);
+v1Router.use('/evaluation', evaluationRouter);
 
 export { v1Router };

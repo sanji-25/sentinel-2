@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { SCENARIOS, runScenario } from '../../modules/scenarios/index.js';
+import { SCENARIOS, SCENARIO_DEFINITIONS, runScenario } from '../../modules/scenarios/index.js';
 import { NotFoundError } from '../../middleware/errorHandler.js';
 
 const router = Router();
@@ -9,7 +9,7 @@ const router = Router();
  * Lists all available deterministic test scenarios
  */
 router.get('/', (req: Request, res: Response) => {
-  const scenarioList = Object.values(SCENARIOS).map((s) => ({
+  const scenarioList = SCENARIO_DEFINITIONS.map((s) => ({
     id: s.id,
     name: s.name,
     description: s.description,

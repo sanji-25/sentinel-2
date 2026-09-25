@@ -14,6 +14,7 @@ import { interventionEngine, InterventionEngine } from './engine.js';
 import { SessionRepository, sessionRepository } from '../sessions/repository.js';
 import { ActionEventRepository, actionEventRepository } from '../actions/repository.js';
 import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
+import { evaluationService } from '../evaluation/service.js';
 import { ValidationError, NotFoundError, BadRequestError } from '../../middleware/errorHandler.js';
 
 export class InterventionService {
@@ -187,6 +188,7 @@ export class InterventionService {
     }
 
     const updated = await this.interventionRepo.update(intervention);
+    evaluationService.recordHumanDecision();
 
     // Audit log
     await this.audit.logEvent({
