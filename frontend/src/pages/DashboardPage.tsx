@@ -6,6 +6,7 @@ import { ExpertOverview } from '../features/expert/ExpertOverview';
 import { AgentsView } from '../features/agents/AgentsView';
 import { SessionsView } from '../features/sessions/SessionsView';
 import { LiveActionsView } from '../features/actions/LiveActionsView';
+import { AuditTrailView } from '../features/audit/AuditTrailView';
 
 export const DashboardPage: React.FC = () => {
   const { isSimple } = useMode();
@@ -16,7 +17,8 @@ export const DashboardPage: React.FC = () => {
       {activeTab === 'agents' && <AgentsView />}
       {activeTab === 'sessions' && <SessionsView />}
       {activeTab === 'actions' && <LiveActionsView />}
-      {(activeTab === 'dashboard' || !['agents', 'sessions', 'actions'].includes(activeTab)) && (
+      {activeTab === 'audit' && <AuditTrailView />}
+      {(activeTab === 'dashboard' || !['agents', 'sessions', 'actions', 'audit'].includes(activeTab)) && (
         isSimple ? <SimpleOverview /> : <ExpertOverview />
       )}
     </div>

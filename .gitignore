@@ -64,3 +64,5 @@ lerna-debug.log*
 scratch/
 tmp/
 temp/
+data/
+backend/data/

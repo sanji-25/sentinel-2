@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Session, CreateSessionInput } from '@sentinel/shared';
 import { SessionRepository, sessionRepository } from './repository.js';
 import { AgentRepository, agentRepository } from '../agents/repository.js';
+import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
 import {
   ValidationError,
   NotFoundError,
@@ -12,8 +13,14 @@ import {
 export class SessionService {
   constructor(
     private sessionRepo: SessionRepository = sessionRepository,
-    private agentRepo: AgentRepository = agentRepository
+    private agentRepo: AgentRepository = agentRepository,
+    private audit: AuditService = defaultAuditService
   ) {}
+
+  public setRepository(sessionRepo: SessionRepository, agentRepo?: AgentRepository): void {
+    this.sessionRepo = sessionRepo;
+    if (agentRepo) this.agentRepo = agentRepo;
+  }
 
   async createSession(input: CreateSessionInput): Promise<Session> {
     if (!input || !input.agentId || typeof input.agentId !== 'string' || input.agentId.trim().length === 0) {
@@ -49,7 +56,22 @@ export class SessionService {
       metadata: input.metadata || {}
     };
 
-    return this.sessionRepo.create(session);
+    const created = await this.sessionRepo.create(session);
+
+    await this.audit.logEvent({
+      eventType: 'SESSION_STARTED',
+      entityType: 'session',
+      entityId: created.id,
+      sessionId: created.id,
+      actor: agent.id,
+      payload: {
+        agentId: agent.id,
+        agentName: agent.name,
+        startedAt: created.startedAt
+      }
+    });
+
+    return created;
   }
 
   async getSession(id: string): Promise<Session> {
@@ -93,7 +115,23 @@ export class SessionService {
     session.status = 'COMPLETED';
     session.endedAt = new Date().toISOString();
 
-    return this.sessionRepo.update(session);
+    const updated = await this.sessionRepo.update(session);
+
+    await this.audit.logEvent({
+      eventType: 'SESSION_COMPLETED',
+      entityType: 'session',
+      entityId: updated.id,
+      sessionId: updated.id,
+      actor: updated.agentId,
+      payload: {
+        agentId: updated.agentId,
+        actionCount: updated.actionCount,
+        startedAt: updated.startedAt,
+        endedAt: updated.endedAt
+      }
+    });
+
+    return updated;
   }
 }
 

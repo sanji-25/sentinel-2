@@ -29,9 +29,9 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'agents', label: 'Active Agents', icon: Bot },
   { id: 'sessions', label: 'Sessions', icon: Activity },
   { id: 'actions', label: 'Live Actions', icon: ShieldAlert },
-  { id: 'trajectory', label: 'Trajectory', icon: GitBranch, tag: 'Phase 2' },
-  { id: 'interventions', label: 'Interventions', icon: Sliders, tag: 'Phase 3' },
-  { id: 'audit', label: 'Audit Trail', icon: FileText, tag: 'Phase 5' }
+  { id: 'audit', label: 'Audit Trail', icon: FileText },
+  { id: 'trajectory', label: 'Trajectory', icon: GitBranch, tag: 'Phase 3' },
+  { id: 'interventions', label: 'Interventions', icon: Sliders, tag: 'Phase 4' }
 ];
 
 export const NavigationRail: React.FC<NavigationRailProps> = ({

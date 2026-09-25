@@ -2,7 +2,8 @@ import React from 'react';
 import { ModeSwitcher } from './ModeSwitcher';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { useHealth } from '../../hooks/useHealth';
-import { Shield, Radio, Menu } from 'lucide-react';
+import { usePersistence } from '../../hooks/usePersistence';
+import { Shield, Radio, Menu, Database } from 'lucide-react';
 
 interface TopBarProps {
   onToggleMobileNav?: () => void;
@@ -10,6 +11,21 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({ onToggleMobileNav }) => {
   const { isOnline, latencyMs } = useHealth();
+  const { provider, connected, details } = usePersistence();
+
+  let persistenceLabel = 'Using local fallback';
+  let persistenceColor = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/40';
+
+  if (provider === 'supabase' && connected) {
+    persistenceLabel = 'Connected';
+    persistenceColor = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40';
+  } else if (provider === 'supabase' && !connected) {
+    persistenceLabel = 'Database unavailable';
+    persistenceColor = 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/40';
+  } else if (provider === 'memory') {
+    persistenceLabel = 'In-Memory (Volatile)';
+    persistenceColor = 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  }
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b border-slate-200 dark:border-slate-800 bg-surface-primary/90 dark:bg-surface-primary/80 backdrop-blur-md px-4 sm:px-6">
@@ -52,8 +68,17 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleMobileNav }) => {
           <ModeSwitcher />
         </div>
 
-        {/* Right: Runtime Health + Theme Switcher */}
-        <div className="flex items-center gap-3">
+        {/* Right: Runtime Health + Persistence Indicator + Theme Switcher */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Persistence status indicator */}
+          <div
+            className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-pill text-xs font-medium border ${persistenceColor}`}
+            title={details || persistenceLabel}
+          >
+            <Database className="w-3.5 h-3.5 opacity-80" />
+            <span>{persistenceLabel}</span>
+          </div>
+
           {/* Health indicator */}
           <div
             className={`flex items-center gap-2 px-2.5 py-1 rounded-pill text-xs font-medium border ${
@@ -64,7 +89,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleMobileNav }) => {
             title={isOnline ? `Backend API active (${latencyMs}ms)` : 'Backend API disconnected'}
           >
             <Radio className={`w-3.5 h-3.5 ${isOnline ? 'text-emerald-500 animate-pulse' : 'text-rose-500'}`} />
-            <span className="hidden md:inline">
+            <span className="hidden lg:inline">
               {isOnline ? 'Control Layer Active' : 'API Offline'}
             </span>
             {isOnline && latencyMs !== undefined && (

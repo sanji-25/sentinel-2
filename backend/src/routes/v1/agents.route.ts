@@ -54,4 +54,40 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+/**
+ * POST /api/v1/agents/:id/suspend
+ * Suspends an agent
+ */
+router.post('/:id/suspend', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const reason = req.body?.reason;
+    const agent = await agentService.suspendAgent(req.params.id, reason);
+    res.status(200).json({
+      data: { agent },
+      agent,
+      requestId: req.id
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/agents/:id/revoke
+ * Revokes an agent
+ */
+router.post('/:id/revoke', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const reason = req.body?.reason;
+    const agent = await agentService.revokeAgent(req.params.id, reason);
+    res.status(200).json({
+      data: { agent },
+      agent,
+      requestId: req.id
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export const agentsRouter = router;

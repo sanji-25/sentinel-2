@@ -1,10 +1,18 @@
 import crypto from 'crypto';
 import { Agent, CreateAgentInput } from '@sentinel/shared';
 import { AgentRepository, agentRepository } from './repository.js';
+import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
 import { ValidationError, NotFoundError } from '../../middleware/errorHandler.js';
 
 export class AgentService {
-  constructor(private repo: AgentRepository = agentRepository) {}
+  constructor(
+    private repo: AgentRepository = agentRepository,
+    private audit: AuditService = defaultAuditService
+  ) {}
+
+  public setRepository(repo: AgentRepository): void {
+    this.repo = repo;
+  }
 
   async registerAgent(input: CreateAgentInput): Promise<Agent> {
     if (!input || typeof input !== 'object') {
@@ -47,7 +55,21 @@ export class AgentService {
       metadata: input.metadata || {}
     };
 
-    return this.repo.create(agent);
+    const created = await this.repo.create(agent);
+
+    await this.audit.logEvent({
+      eventType: 'AGENT_CREATED',
+      entityType: 'agent',
+      entityId: created.id,
+      actor: 'system',
+      payload: {
+        name: created.name,
+        type: created.type,
+        scopes: created.scopes
+      }
+    });
+
+    return created;
   }
 
   async getAgent(id: string): Promise<Agent> {
@@ -64,6 +86,40 @@ export class AgentService {
 
   async listAgents(): Promise<Agent[]> {
     return this.repo.findAll();
+  }
+
+  async suspendAgent(id: string, reason?: string): Promise<Agent> {
+    const agent = await this.getAgent(id);
+    agent.status = 'SUSPENDED';
+    agent.updatedAt = new Date().toISOString();
+    const updated = await this.repo.update(agent);
+
+    await this.audit.logEvent({
+      eventType: 'AGENT_SUSPENDED',
+      entityType: 'agent',
+      entityId: updated.id,
+      actor: 'system',
+      payload: { reason: reason || 'Administrative suspension' }
+    });
+
+    return updated;
+  }
+
+  async revokeAgent(id: string, reason?: string): Promise<Agent> {
+    const agent = await this.getAgent(id);
+    agent.status = 'REVOKED';
+    agent.updatedAt = new Date().toISOString();
+    const updated = await this.repo.update(agent);
+
+    await this.audit.logEvent({
+      eventType: 'AGENT_REVOKED',
+      entityType: 'agent',
+      entityId: updated.id,
+      actor: 'system',
+      payload: { reason: reason || 'Administrative revocation' }
+    });
+
+    return updated;
   }
 }
 

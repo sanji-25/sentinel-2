@@ -6,13 +6,15 @@ import {
   ActionReversibility,
   IngestActionInput,
   IngestActionResult,
-  PolicyDecision
+  PolicyDecision,
+  AuditEventType
 } from '@sentinel/shared';
 import { ActionEventRepository, actionEventRepository } from './repository.js';
 import { AgentRepository, agentRepository } from '../agents/repository.js';
 import { SessionRepository, sessionRepository } from '../sessions/repository.js';
 import { ScopeAuthorizationService, scopeAuthorizationService } from '../authorization/service.js';
 import { PolicyDecisionService, policyDecisionService } from '../decisions/policy.service.js';
+import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
 import {
   ValidationError,
   NotFoundError,
@@ -51,8 +53,21 @@ export class ActionIngestionService {
     private agentRepo: AgentRepository = agentRepository,
     private sessionRepo: SessionRepository = sessionRepository,
     private authzService: ScopeAuthorizationService = scopeAuthorizationService,
-    private policyService: PolicyDecisionService = policyDecisionService
+    private policyService: PolicyDecisionService = policyDecisionService,
+    private audit: AuditService = defaultAuditService
   ) {}
+
+  public setRepositories(
+    actionRepo: ActionEventRepository,
+    agentRepo?: AgentRepository,
+    sessionRepo?: SessionRepository,
+    audit?: AuditService
+  ): void {
+    this.actionRepo = actionRepo;
+    if (agentRepo) this.agentRepo = agentRepo;
+    if (sessionRepo) this.sessionRepo = sessionRepo;
+    if (audit) this.audit = audit;
+  }
 
   async ingestAction(input: IngestActionInput, requestId = '-'): Promise<IngestActionResult> {
     // 1. Validate payload existence
@@ -200,6 +215,46 @@ export class ActionIngestionService {
     console.log(
       `[ACTION_INGESTION] [${requestId}] agentId=${agent.id} sessionId=${session.id} eventId=${eventId} action=${normalizedAction} resource=${resource} authz=${authorization} decision=${decision.action}`
     );
+
+    // 17. Audit Logging - ACTION_INGESTED
+    await this.audit.logEvent({
+      eventType: 'ACTION_INGESTED',
+      entityType: 'action',
+      entityId: eventId,
+      sessionId: session.id,
+      actor: agent.id,
+      payload: {
+        action: normalizedAction,
+        resource,
+        resourceType,
+        scope,
+        sensitivity: normalizedSensitivity,
+        reversibility: normalizedReversibility,
+        authorization
+      }
+    });
+
+    // 18. Audit Logging - Decision outcome
+    const decisionEventMap: Record<string, AuditEventType> = {
+      ALLOW: 'ACTION_ALLOWED',
+      MONITOR: 'ACTION_MONITORED',
+      WARN: 'ACTION_WARNED',
+      CONFIRM: 'ACTION_CONFIRM_REQUIRED',
+      BLOCK: 'ACTION_BLOCKED'
+    };
+
+    const decisionEventType = decisionEventMap[decision.action] || 'ACTION_INGESTED';
+    await this.audit.logEvent({
+      eventType: decisionEventType,
+      entityType: 'action',
+      entityId: eventId,
+      sessionId: session.id,
+      actor: 'sentinel-policy-engine',
+      payload: {
+        decision: decision.action,
+        reason: decision.reason
+      }
+    });
 
     return {
       event: actionEvent,
