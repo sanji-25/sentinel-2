@@ -17,7 +17,13 @@ export type GeminiScenarioId =
   | 'GEMINI_SCOPE_CREEP'
   | 'GEMINI_SENSITIVE_ACCESS'
   | 'GEMINI_PRIVILEGE_ESCALATION'
-  | 'GEMINI_DESTRUCTIVE_ATTEMPT';
+  | 'GEMINI_DESTRUCTIVE_ATTEMPT'
+  | 'GEMINI_FALSE_POSITIVE'
+  | 'NORMAL_RESEARCH'
+  | 'SCOPE_CREEP'
+  | 'PRIVILEGE_ESCALATION'
+  | 'DESTRUCTIVE_ATTEMPT'
+  | 'FALSE_POSITIVE_CASE';
 
 export interface ProposedAction {
   action: ActionType;
@@ -77,6 +83,8 @@ export interface ControlledStepResult {
   decision: PolicyDecisionAction;
   decisionReasons: string[];
   risk: number;
+  previousRisk?: number;
+  riskDelta?: number;
   trajectoryDeviation: number;
   riskAcceleration: string;
   predictedNextRisk: number;

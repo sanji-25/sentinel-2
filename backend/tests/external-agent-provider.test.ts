@@ -43,9 +43,10 @@ describe('External AI Agent Provider Gateway (Phase 6)', () => {
     it('Gateway reports provider status and falls back gracefully when key is missing', () => {
       const status = gateway.getStatus();
       expect(status.providerName).toBeDefined();
-      expect(status.supportedScenarios.length).toBe(5);
+      expect(status.supportedScenarios.length).toBe(6);
       expect(status.supportedScenarios).toContain('GEMINI_SCOPE_CREEP');
       expect(status.supportedScenarios).toContain('GEMINI_DESTRUCTIVE_ATTEMPT');
+      expect(status.supportedScenarios).toContain('GEMINI_FALSE_POSITIVE');
     });
   });
 
@@ -220,6 +221,22 @@ I hope this meets Sentinel criteria.`;
       expect(result.status).toBe('COMPLETED');
       expect(result.totalSteps).toBe(4);
       expect(result.steps.every((s) => s.decision === 'ALLOW' || s.decision === 'MONITOR')).toBe(true);
+    });
+
+    it('handles legitimate diagnostic work without blindly blocking (GEMINI_FALSE_POSITIVE)', async () => {
+      const { session } = await gateway.startSession({ scenarioId: 'GEMINI_FALSE_POSITIVE' });
+      const step1 = await gateway.stepSession(session.id); // READ runbooks
+      expect(step1.decision).toBe('ALLOW');
+      expect(step1.riskDelta).toBeDefined();
+
+      const step2 = await gateway.stepSession(session.id); // READ kernel
+      expect(step2.decision).toBe('ALLOW');
+
+      const step3 = await gateway.stepSession(session.id); // EXPORT latency-dump.json
+      // System evaluates context as authorized - should NOT blindly block!
+      expect(step3.decision).not.toBe('BLOCK');
+      expect(step3.executed).toBe(true);
+      expect(step3.halted).toBe(false);
     });
   });
 });
