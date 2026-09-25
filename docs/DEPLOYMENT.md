@@ -108,7 +108,7 @@ Output directory: `frontend/dist/`
 The root `render.yaml` Blueprint creates this static site alongside the backend. Use **New** → **Blueprint** to create both services together. The frontend build settings are:
 
 - **Root Directory:** repository root
-- **Build Command:** `npm ci && npm run build:shared && npm run build:frontend`
+- **Build Command:** `npm ci --include=dev && npm run build:shared && npm run build:frontend`
 - **Publish Directory:** `frontend/dist`
 - **Environment variable:** `VITE_API_URL` = `https://<your-api-service>.onrender.com/api`
 
@@ -127,7 +127,7 @@ This ensures React Router handles all client-side routes.
 ### Build & Start Commands (Monorepo Root)
 ```bash
 # Build Command
-npm ci && npm run build:shared && npm run build:backend
+npm ci --include=dev && npm run build:shared && npm run build:backend
 
 # Start Command
 node backend/dist/server.js
@@ -140,7 +140,7 @@ node backend/dist/server.js
 3. Configure the service:
    - **Name:** `sentinel-api`
    - **Root Directory:** *(leave blank — repository root)*
-   - **Build Command:** `npm ci && npm run build:shared && npm run build:backend`
+  - **Build Command:** `npm ci --include=dev && npm run build:shared && npm run build:backend`
    - **Start Command:** `node backend/dist/server.js`
    - **Node Version:** `20.x` or later
    - **Health Check Path:** `/api/health`
@@ -154,7 +154,7 @@ services:
   - type: web
     name: sentinel-api
     runtime: node
-    buildCommand: npm ci && npm run build:shared && npm run build:backend
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build:backend
     startCommand: node backend/dist/server.js
     healthCheckPath: /api/health
     autoDeploy: false

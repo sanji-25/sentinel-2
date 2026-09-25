@@ -2,7 +2,7 @@ services:
   - type: web
     name: sentinel-api
     runtime: node
-    buildCommand: npm ci && npm run build:shared && npm run build:backend
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build:backend
     startCommand: node backend/dist/server.js
     healthCheckPath: /api/health
     autoDeploy: false
@@ -26,7 +26,7 @@ services:
 
   - type: static
     name: sentinel-frontend
-    buildCommand: npm ci && npm run build:shared && npm run build:frontend
+    buildCommand: npm ci --include=dev && npm run build:shared && npm run build:frontend
     staticPublishPath: frontend/dist
     autoDeploy: false
     envVars:
