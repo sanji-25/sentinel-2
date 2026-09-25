@@ -4,19 +4,29 @@
 
 ---
 
-## Deployment Sequence (9 Steps)
+## Deployment Sequence
 
 ```
 STEP 1  Configure Supabase — run SQL migrations, copy URL + service role key
-STEP 2  Deploy backend to Render — connect repo, set root dir = backend
-STEP 3  Configure backend environment variables in Render dashboard
-STEP 4  Verify backend health — curl https://<render-url>/api/health
-STEP 5  Deploy frontend to Vercel — connect repo, set root dir = frontend
-STEP 6  Set VITE_API_URL to the Render backend URL in Vercel settings
-STEP 7  Set backend CORS_ORIGIN to the Vercel frontend URL in Render settings, redeploy
-STEP 8  Verify Gemini API configuration — check /api/v1/system/agent-connection
-STEP 9  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST.md)
+STEP 2  Push the repository and create both services from the Render Blueprint
+STEP 3  Set backend secrets and verify the API and frontend service URLs
+STEP 4  Verify backend health — https://<render-url>/api/health
+STEP 5  Verify Gemini API configuration — check /api/v1/system/agent-connection
+STEP 6  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST.md)
 ```
+
+## Deploy Both Services on Render
+
+The root `render.yaml` defines both the API web service and the frontend static site. To deploy both from Render:
+
+1. Push this repository to a Git provider supported by Render.
+2. In the Render Dashboard, select **New** → **Blueprint**, connect the repository, and select its deployment branch.
+3. Review the two services (`sentinel-api` and `sentinel-frontend`) and apply the Blueprint.
+4. In each service's **Settings**, copy its assigned `onrender.com` URL. If Render added a suffix, update `VITE_API_URL` on `sentinel-frontend` to `https://<API-URL>/api` and `CORS_ORIGIN` on `sentinel-api` to the frontend's `https://<FRONTEND-URL>`, then redeploy both services.
+5. Set the backend secrets and storage configuration described below. Never put backend secrets on the static frontend service.
+6. Verify `https://<API-URL>/api/health`, then open the frontend URL.
+
+The Blueprint defaults assume the service URLs are `https://sentinel-api.onrender.com` and `https://sentinel-frontend.onrender.com`. Confirm the actual URLs before relying on them. The API's CORS origin and the frontend's API URL must match the deployed service domains.
 
 > **Gemini 503 note:** Google's free-tier Gemini API occasionally returns 503 (model overloaded) under spike load.
 > Sentinel automatically falls back to the deterministic mock agent in this case — all security
@@ -29,7 +39,7 @@ STEP 9  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST
 
 1. [Required Accounts & Services](#1-required-accounts--services)
 2. [Environment Variables Reference](#2-environment-variables-reference)
-3. [Frontend Deployment — Vercel](#3-frontend-deployment--vercel)
+3. [Frontend Deployment — Render](#3-frontend-deployment--render)
 4. [Backend Deployment — Render](#4-backend-deployment--render)
 5. [Supabase Configuration](#5-supabase-configuration)
 6. [Gemini Configuration](#6-gemini-configuration)
@@ -44,8 +54,7 @@ STEP 9  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST
 
 | Service | Purpose | Free Tier |
 |---------|---------|-----------|
-| [Vercel](https://vercel.com) | Frontend hosting (React/Vite SPA) | Yes |
-| [Render](https://render.com) | Backend hosting (Node.js/Express) | Yes (sleeps after inactivity) |
+| [Render](https://render.com) | Frontend hosting (static site) and backend hosting (Node.js/Express) | Yes (web service sleeps after inactivity) |
 | [Supabase](https://supabase.com) | PostgreSQL database + RLS | Yes |
 | [Google AI Studio](https://aistudio.google.com) | Gemini API key | Yes (rate-limited) |
 
@@ -86,7 +95,7 @@ STEP 9  Run the complete production E2E checklist (docs/PRODUCTION_E2E_CHECKLIST
 
 ---
 
-## 3. Frontend Deployment — Vercel
+## 3. Frontend Deployment — Render
 
 ### Build command
 ```
@@ -94,23 +103,20 @@ npm run build --workspace=@sentinel/frontend
 ```
 Output directory: `frontend/dist/`
 
-### Steps (Vercel Dashboard)
+### Steps (Render Dashboard)
 
-1. Go to [vercel.com/new](https://vercel.com/new) and import your GitHub repository
-2. Set **Root Directory** → `frontend`
-3. Set **Build Command** → `npm run build`
-4. Set **Output Directory** → `dist`
-5. Add environment variable:
-   - `VITE_API_URL` = `https://your-backend.onrender.com/api`
-6. Deploy
+The root `render.yaml` Blueprint creates this static site alongside the backend. Use **New** → **Blueprint** to create both services together. The frontend build settings are:
 
-### vercel.json (in `frontend/` directory)
+- **Root Directory:** repository root
+- **Build Command:** `npm ci && npm run build:shared && npm run build:frontend`
+- **Publish Directory:** `frontend/dist`
+- **Environment variable:** `VITE_API_URL` = `https://<your-api-service>.onrender.com/api`
 
-```json
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
-}
-```
+Confirm the actual service URLs in Render. If they differ from the Blueprint defaults, update `VITE_API_URL` and the backend's `CORS_ORIGIN`, then redeploy both services.
+
+### SPA fallback (in `render.yaml`)
+
+The Render static-site rewrite sends client-side routes to `/index.html`.
 
 This ensures React Router handles all client-side routes.
 
