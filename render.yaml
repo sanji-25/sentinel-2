@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: sentinel-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/server.js
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STORAGE_DRIVER
+        value: supabase
+      - key: GEMINI_MODEL
+        value: gemini-1.5-flash
+      - key: DEMO_MODE
+        value: "false"
+      # Set these via Render Dashboard → Environment → Secret variables:
+      # CORS_ORIGIN          = https://your-frontend.vercel.app
+      # SUPABASE_URL         = https://your-project.supabase.co
+      # SUPABASE_SERVICE_ROLE_KEY = <service role key>
+      # GEMINI_API_KEY       = <google ai api key>
+      # JWT_SECRET           = <strong random secret>
