@@ -36,6 +36,12 @@
   "author": "Sentinel Team",
   "license": "Apache-2.0",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1"
+    "@google/generative-ai": "^0.24.1",
+    "@types/node": "^20.19.43",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.4.5"
   }
 }
