@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMode } from '../../hooks/useMode';
 import { sessionsApi } from '../../api/sessions.api';
 import { trajectoryApi, ScenarioListItem } from '../../api/trajectory.api';
+import { interventionsApi } from '../../api/interventions.api';
 import {
   Session,
   SessionTrajectoryResponse,
+  SessionInterventionResponse,
   TrajectoryState,
   RiskVelocity,
   RiskAcceleration
@@ -27,6 +29,7 @@ export const TrajectoryView: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string>('');
   const [trajectory, setTrajectory] = useState<SessionTrajectoryResponse | null>(null);
+  const [interventionData, setInterventionData] = useState<SessionInterventionResponse | null>(null);
   const [scenarios, setScenarios] = useState<ScenarioListItem[]>([]);
   const [isRunningScenario, setIsRunningScenario] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,14 +60,18 @@ export const TrajectoryView: React.FC = () => {
     loadInitialData();
   }, [loadInitialData]);
 
-  // 2. Load Selected Session Trajectory
+  // 2. Load Selected Session Trajectory & Intervention Analysis
   const loadTrajectory = useCallback(async (sessionId: string) => {
     if (!sessionId) return;
     setIsLoading(true);
     setError(null);
     try {
-      const data = await trajectoryApi.getTrajectory(sessionId);
-      setTrajectory(data);
+      const [trajData, intervData] = await Promise.all([
+        trajectoryApi.getTrajectory(sessionId),
+        interventionsApi.getSessionIntervention(sessionId).catch(() => null)
+      ]);
+      setTrajectory(trajData);
+      setInterventionData(intervData);
     } catch (err: unknown) {
       setError((err as Error).message || 'Failed to load session trajectory');
     } finally {
@@ -488,7 +495,11 @@ export const TrajectoryView: React.FC = () => {
           )}
 
           {/* Interactive SVG Risk Timeline Graph */}
-          <RiskTrajectoryGraph actions={trajectory.actions} />
+          <RiskTrajectoryGraph
+            actions={trajectory.actions}
+            forecast={interventionData?.analysis.forecast}
+            interventionWindow={interventionData?.analysis.interventionWindow}
+          />
 
           {/* Sequential Action Replay Feed */}
           <div className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-surface-primary dark:bg-surface-primary shadow-tactile-subtle space-y-4">

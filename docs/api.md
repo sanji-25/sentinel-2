@@ -394,11 +394,11 @@ Base Gateway URL: `/api/v1`
 
 ### 6.1 List Scenarios
 * **Endpoint**: `GET /api/v1/scenarios`
-* **Description**: Returns all 6 deterministic behavioral test scenarios.
+* **Description**: Returns all 7 deterministic behavioral test scenarios.
 
 ### 6.2 Execute Scenario
 * **Endpoint**: `POST /api/v1/scenarios/:id/run`
-* **Description**: Executes a scenario end-to-end and returns live step-by-step telemetry, trajectory, and final state.
+* **Description**: Executes a scenario end-to-end and returns live step-by-step telemetry, trajectory, forecast, and counterfactual analysis.
 
 Available Scenarios:
 1. `NORMAL_RESEARCH`
@@ -407,10 +407,52 @@ Available Scenarios:
 4. `PRIVILEGE_ESCALATION`
 5. `DESTRUCTIVE_SEQUENCE`
 6. `LEGITIMATE_UNUSUAL_BEHAVIOR`
+7. `RIGHT_MOMENT_TO_INTERVENE` (Phase 4 flagship demo scenario)
 
 ---
 
-## 7. Health Check Endpoint
+## 7. Intervention Intelligence & Human Review Endpoints
+
+### 7.1 List Interventions / Pending Reviews
+* **Endpoint**: `GET /api/v1/interventions`
+* **Query Parameters**:
+  * `status`: Optional filter (`PENDING` | `APPROVED` | `DENIED` | `EXPIRED`)
+  * `sessionId`: Optional session filter
+* **Description**: Lists recorded interventions and pending human review queue items.
+
+### 7.2 Get Single Intervention
+* **Endpoint**: `GET /api/v1/interventions/:id`
+* **Description**: Retrieves full intervention record including action details, reasons, forecast, and counterfactual analysis.
+
+### 7.3 Submit Human Review Decision
+* **Endpoint**: `POST /api/v1/interventions/:id/decision`
+* **Content-Type**: `application/json`
+* **Payload**:
+```json
+{
+  "decision": "ALLOW_ONCE",
+  "reviewerId": "sec-analyst-1",
+  "reason": "Legitimate maintenance window approved"
+}
+```
+* **Supported Decisions**: `ALLOW_ONCE`, `DENY`, `REVOKE_SESSION`
+* **Description**: Resolves a pending review alert and persists the decision into the audit trail.
+
+### 7.4 Session Intervention Telemetry
+* **Endpoint**: `GET /api/v1/sessions/:id/intervention`
+* **Description**: Returns real-time intervention analysis, resolved window (`TOO_EARLY` | `OPTIMAL_WINDOW` | `TOO_LATE`), urgency, and recommendation for the specified session.
+
+### 7.5 Session Risk Forecast
+* **Endpoint**: `GET /api/v1/sessions/:id/forecast`
+* **Description**: Returns 3-step projected trajectory risk horizon (+1, +2, +3 actions) and horizon classification.
+
+### 7.6 Session Counterfactual Analysis
+* **Endpoint**: `GET /api/v1/sessions/:id/counterfactual`
+* **Description**: Evaluates trade-offs across `EARLY`, `RECOMMENDED`, and `LATE` intervention paths.
+
+---
+
+## 8. Health Check Endpoint
 * **Endpoint**: `GET /api/health`
 * **Response (`200 OK`)**:
 ```json

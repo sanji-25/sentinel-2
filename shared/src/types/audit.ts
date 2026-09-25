@@ -14,12 +14,14 @@ export type AuditEventType =
   | 'ACTION_MONITORED'
   | 'ACTION_WARNED'
   | 'ACTION_CONFIRM_REQUIRED'
-  | 'ACTION_BLOCKED';
+  | 'ACTION_BLOCKED'
+  | 'INTERVENTION_TRIGGERED'
+  | 'HUMAN_REVIEW_RESOLVED';
 
 export interface AuditLogEntry {
   id: string;
   eventType: AuditEventType;
-  entityType: 'agent' | 'session' | 'action' | 'system';
+  entityType: 'agent' | 'session' | 'action' | 'system' | 'intervention';
   entityId: string;
   sessionId?: string;
   actor: string;
@@ -29,7 +31,7 @@ export interface AuditLogEntry {
 
 export interface CreateAuditLogInput {
   eventType: AuditEventType;
-  entityType: 'agent' | 'session' | 'action' | 'system';
+  entityType: 'agent' | 'session' | 'action' | 'system' | 'intervention';
   entityId: string;
   sessionId?: string;
   actor?: string;

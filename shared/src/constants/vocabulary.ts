@@ -128,6 +128,12 @@ export const INTERVENTION_STAGE_VOCABULARY: Record<InterventionWindowStage, {
     expertDescription: 'Trajectory divergence or risk acceleration threshold reached.',
     isOptimal: false
   },
+  OPTIMAL_WINDOW: {
+    label: 'Optimal Intervention Window',
+    simpleDescription: 'Ideal moment to intervene before any serious harm occurs.',
+    expertDescription: 'Pre-execution sweet spot. Maximum reversibility and minimal irreversible consequence.',
+    isOptimal: true
+  },
   OPTIMAL_INTERVENTION_WINDOW: {
     label: 'Optimal Intervention Window',
     simpleDescription: 'Ideal moment to intervene before any serious harm occurs.',

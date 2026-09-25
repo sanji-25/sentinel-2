@@ -1,12 +1,14 @@
 import {
   ActionEvent,
   PolicyDecision,
-  PolicyDecisionAction
+  PolicyDecisionAction,
+  InterventionAnalysis
 } from '@sentinel/shared';
 
 export interface PolicyEvaluationContext {
   event: ActionEvent;
   agentName?: string;
+  interventionAnalysis?: InterventionAnalysis;
 }
 
 export class PolicyDecisionService {

@@ -1,7 +1,7 @@
 /**
  * Human in the loop review definitions
  */
-export type HumanReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
+export type HumanReviewStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'REJECTED' | 'EXPIRED';
 
 export interface HumanReview {
   id: string;

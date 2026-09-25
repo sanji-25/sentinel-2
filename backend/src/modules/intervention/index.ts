@@ -1,9 +1,7 @@
-/**
- * Intervention Intelligence Engine Module (Architectural Preparation)
- * Sentinel core innovation: Determines the optimal intervention window.
- * Distinguishes TOO_EARLY, MONITOR, WARNING, OPTIMAL_INTERVENTION_WINDOW, CONFIRM, TOO_LATE.
- */
-export interface InterventionModuleContract {
-  name: 'intervention';
-  status: 'prepared';
-}
+export * from './window.js';
+export * from './forecast.js';
+export * from './cost.js';
+export * from './counterfactual.js';
+export * from './engine.js';
+export * from './repository.js';
+export * from './service.js';

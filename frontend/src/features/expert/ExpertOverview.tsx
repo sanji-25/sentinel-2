@@ -3,6 +3,7 @@ import { MetricCard } from '../../components/common/MetricCard';
 import { DecisionBadge } from '../../components/common/DecisionBadge';
 import { Activity, Gauge, GitBranch, Crosshair, Lock } from 'lucide-react';
 import { InterventionWindowStage } from '@sentinel/shared';
+import { useNavigation } from '../../stores/navigationContext';
 
 const INTERVENTION_STAGES: { stage: InterventionWindowStage; label: string; active?: boolean; optimal?: boolean }[] = [
   { stage: 'TOO_EARLY', label: '1. Too Early' },
@@ -14,6 +15,8 @@ const INTERVENTION_STAGES: { stage: InterventionWindowStage; label: string; acti
 ];
 
 export const ExpertOverview: React.FC = () => {
+  const { setActiveTab } = useNavigation();
+
   return (
     <div className="space-y-6">
       {/* Top Banner: Technical Telemetry */}
@@ -34,6 +37,12 @@ export const ExpertOverview: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveTab('interventions')}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 text-xs font-semibold shadow-tactile-subtle hover:bg-slate-800 dark:hover:bg-white transition-all cursor-pointer"
+            >
+              Open Interventions Console →
+            </button>
             <div className="px-3 py-1.5 rounded-xl bg-surface-100 dark:bg-surface-800 text-xs font-mono text-slate-600 dark:text-slate-300">
               Active Model: <span className="text-blue-600 dark:text-blue-400 font-semibold">Gemini 1.5 Pro</span>
             </div>

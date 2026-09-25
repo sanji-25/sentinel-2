@@ -3,6 +3,7 @@ import { StatusIndicator } from '../../components/common/StatusIndicator';
 import { MetricCard } from '../../components/common/MetricCard';
 import { ShieldCheck, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { SimpleModeStatus } from '@sentinel/shared';
+import { useNavigation } from '../../stores/navigationContext';
 
 interface AgentOverviewItem {
   id: string;
@@ -45,6 +46,8 @@ const SAMPLE_AGENTS: AgentOverviewItem[] = [
 ];
 
 export const SimpleOverview: React.FC = () => {
+  const { setActiveTab } = useNavigation();
+
   return (
     <div className="space-y-6">
       {/* Primary Status Banner - Answering "What is happening? Is it safe? Do I need to do something?" */}
@@ -68,7 +71,8 @@ export const SimpleOverview: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               type="button"
-              className="px-5 py-2.5 rounded-pill bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-tactile-subtle inline-flex items-center justify-center gap-2 transition-colors"
+              onClick={() => setActiveTab('interventions')}
+              className="px-5 py-2.5 rounded-pill bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-tactile-subtle inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <span>Review Pending Action</span>
               <ArrowRight className="w-4 h-4" />

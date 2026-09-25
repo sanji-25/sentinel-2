@@ -16,6 +16,7 @@ import { ScopeAuthorizationService, scopeAuthorizationService } from '../authori
 import { PolicyDecisionService, policyDecisionService } from '../decisions/policy.service.js';
 import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
 import { TrajectoryService, trajectoryService as defaultTrajectoryService } from '../trajectory/service.js';
+import { InterventionService, interventionService as defaultInterventionService } from '../intervention/service.js';
 import {
   ValidationError,
   NotFoundError,
@@ -56,7 +57,8 @@ export class ActionIngestionService {
     private authzService: ScopeAuthorizationService = scopeAuthorizationService,
     private policyService: PolicyDecisionService = policyDecisionService,
     private audit: AuditService = defaultAuditService,
-    private trajectoryService: TrajectoryService = defaultTrajectoryService
+    private trajectoryService: TrajectoryService = defaultTrajectoryService,
+    private interventionService: InterventionService = defaultInterventionService
   ) {}
 
   public setRepositories(
@@ -64,13 +66,15 @@ export class ActionIngestionService {
     agentRepo?: AgentRepository,
     sessionRepo?: SessionRepository,
     audit?: AuditService,
-    trajectoryService?: TrajectoryService
+    trajectoryService?: TrajectoryService,
+    interventionService?: InterventionService
   ): void {
     this.actionRepo = actionRepo;
     if (agentRepo) this.agentRepo = agentRepo;
     if (sessionRepo) this.sessionRepo = sessionRepo;
     if (audit) this.audit = audit;
     if (trajectoryService) this.trajectoryService = trajectoryService;
+    if (interventionService) this.interventionService = interventionService;
   }
 
   async ingestAction(input: IngestActionInput, requestId = '-'): Promise<IngestActionResult> {
@@ -211,13 +215,30 @@ export class ActionIngestionService {
       session
     });
 
-    // Attach trajectory snapshot to action metadata
+    // 14b. Evaluate Intervention Analysis (Window, Forecast, Cost, Counterfactuals)
+    const interventionAnalysis = this.interventionService.evaluateIntervention({
+      action: actionEvent,
+      session,
+      currentRisk: trajectoryEval.currentRisk,
+      previousRisk: session.currentRisk ?? Math.max(0, trajectoryEval.currentRisk - trajectoryEval.riskDelta),
+      riskDelta: trajectoryEval.riskDelta,
+      riskVelocity: trajectoryEval.riskVelocity,
+      riskAcceleration: trajectoryEval.riskAcceleration,
+      trajectoryDeviation: trajectoryEval.trajectoryDeviation
+    });
+
+    // Attach trajectory snapshot & intervention telemetry to action metadata
     actionEvent.metadata = {
       ...(actionEvent.metadata || {}),
       risk: trajectoryEval.currentRisk,
       actionRisk: trajectoryEval.actionRisk,
       trajectoryDeviation: trajectoryEval.trajectoryDeviation,
-      trajectoryState: trajectoryEval.state
+      trajectoryState: trajectoryEval.state,
+      interventionWindow: interventionAnalysis.interventionWindow,
+      interventionUrgency: interventionAnalysis.urgency,
+      predictedRisk: interventionAnalysis.predictedRisk,
+      forecast: interventionAnalysis.forecast,
+      counterfactual: interventionAnalysis.counterfactual
     };
 
     // 15. Record Action Event
@@ -237,17 +258,38 @@ export class ActionIngestionService {
       trajectoryFeatures: trajectoryEval.features,
       trajectoryComponents: trajectoryEval.components,
       trajectoryReasons: trajectoryEval.plainReasons,
-      lastState: trajectoryEval.state
+      lastState: trajectoryEval.state,
+      interventionWindow: interventionAnalysis.interventionWindow,
+      interventionUrgency: interventionAnalysis.urgency,
+      predictedRisk: interventionAnalysis.predictedRisk,
+      forecast: interventionAnalysis.forecast,
+      counterfactual: interventionAnalysis.counterfactual
     };
     await this.sessionRepo.update(session);
 
-    // 17. Produce Basic Policy Decision
+    // 17. Produce Basic Policy Decision with Intervention Intelligence Context
     const decision: PolicyDecision = this.policyService.evaluate({
       event: actionEvent,
-      agentName: agent.name
+      agentName: agent.name,
+      interventionAnalysis
     });
 
     actionEvent.metadata.decision = decision;
+
+    // 17b. If human confirmation required, register pending review in queue
+    if (decision.action === 'CONFIRM') {
+      try {
+        const pendingReview = await this.interventionService.createPendingIntervention({
+          analysis: interventionAnalysis,
+          action: actionEvent,
+          session,
+          agent
+        });
+        actionEvent.metadata.pendingInterventionId = pendingReview.id;
+      } catch (err) {
+        console.warn(`[INTERVENTION] Failed to record pending review: ${(err as Error).message}`);
+      }
+    }
 
     // 18. Structured Log of Action Ingestion
     console.log(

@@ -230,8 +230,8 @@ Sentinel 2.0 uses a distinct visual language designed for clarity and focus:
 - [x] **Phase 1**: Core agent identity registry, session management, action ingestion pipeline, deterministic policy decisions (`ALLOW`, `MONITOR`, `WARN`, `CONFIRM`, `BLOCK`), external agent simulation demo script, frontend views for Agents, Sessions, and Live Actions
 - [x] **Phase 2**: Supabase PostgreSQL database persistence, local-disk fallback, append-only immutable audit trail with cryptographic hash chaining, persistence status UI
 - [x] **Phase 3**: Trajectory Intelligence & Cumulative Risk Engine: 10 explainable features, configurable baseline, weighted deviation formula, cumulative session risk, 6 deterministic test scenarios, interactive trajectory timeline graph, dual Simple/Expert modes
-- [ ] *Phase 4 (Next)*: Intervention intelligence & optimal intervention window calculation (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`)
-- [ ] *Phase 5 (Pending)*: Live Gemini agent scenario lab
+- [x] **Phase 4**: Intervention Intelligence Engine: optimal intervention window (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`), deterministic trajectory risk forecasting, intervention cost vs. delay risk model, counterfactual analysis (`EARLY`, `RECOMMENDED`, `LATE`), human review queue and decision APIs, enhanced risk trajectory graph with forecast projection, and Scenario 7 "Right Moment to Intervene"
+- [ ] *Phase 5 (Next)*: Live Gemini agent scenario lab, interactive tool invocation sandbox, and presentation polish
 
 ---
 

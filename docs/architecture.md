@@ -277,20 +277,90 @@ $$\text{currentRisk}_t = \min\left(100, \max\left(0.5 \cdot \text{actionRisk}_t 
 
 ---
 
-## 10. Gemini Integration Plan (Target: Phase 1+)
-* **External AI Agent Model**: Gemini 1.5 Pro and Gemini 1.5 Flash via official `@google/genai` or `@google/generative-ai` SDK.
-* **Server-Side Security**: All Gemini API keys, prompt templates, and execution tokens remain exclusively on the backend. No keys are ever delivered to the client.
-* **Proxy Architecture**: The Gemini agent invokes tool calls via Sentinel's control endpoint. Sentinel processes the call through the intelligence pipeline before either delegating to the actual target tool or halting execution.
+---
+
+## 10. Intervention Intelligence Engine (Phase 4 Completed)
+
+### 10.1 Core Purpose & Pipeline
+The central question of Sentinel 2.0 is:
+> **"WHEN should Sentinel intervene?"**
+
+Sentinel evaluates the full analytical sequence:
+```
+ACTION
+  → TRAJECTORY
+  → DEVIATION
+  → RISK
+  → RISK VELOCITY
+  → RISK ACCELERATION
+  → FORECAST
+  → INTERVENTION WINDOW
+  → DECISION
+```
+
+> [!NOTE]
+> **Prototype Model Disclaimer**: The forecast and counterfactual models implemented in Sentinel 2.0 are deterministic prototype intervention models based on behavioral telemetry and trajectory dynamics, not a validated production machine-learning predictor.
+
+### 10.2 Intervention Window Resolution
+The engine classifies the operational state into one of three deterministic windows:
+1. **`TOO_EARLY`**:
+   - Risk is low to moderate ($\le 45$), trajectory is substantially within baseline ($\le 45$), acceleration is not surging, and the current action is safely reversible.
+   - Intervention at this point halts benign exploration and creates unnecessary workflow friction.
+   - **Recommendation**: `ALLOW` or `MONITOR`.
+2. **`OPTIMAL_WINDOW`**:
+   - Trajectory deviation is elevated ($\ge 50$), risk is rising into the warning/confirmation band (50–85), velocity is high, acceleration is rising/surging, and predicted risk threatens critical thresholds within 1–2 steps, yet the current action remains *reversible*.
+   - Intervening here provides maximum risk reduction with minimal disruption before irreversible mutations occur.
+   - **Recommendation**: `WARN` or `CONFIRM`.
+3. **`TOO_LATE`**:
+   - Risk has breached critical thresholds ($\ge 86$), irreversible mutations or destructive verbs (`DELETE`, `PRIVILEGE_ESCALATION`) are underway.
+   - Safety margins have collapsed; containment must be enforced immediately.
+   - **Recommendation**: `BLOCK`.
+
+### 10.3 Trajectory-Based Risk Forecast Formula
+The forecast projects risk forward across a 3-step horizon ($t+1, t+2, t+3$):
+$$\text{BaseSlope} = \Delta R + (\text{velocityFactor} \times 4) + (\text{accelerationFactor} \times 8)$$
+$$\text{ProjectedRisk}(t+k) = \text{clamp}_{0}^{100}\left(\text{CurrentRisk} + \text{BaseSlope} \times k + 0.15 \times \text{TrajectoryDeviation}\right)$$
+
+Where:
+- Velocity factors: $\text{LOW} = 0$, $\text{MEDIUM} = 1$, $\text{HIGH} = 2$, $\text{EXTREME} = 3$
+- Acceleration factors: $\text{FALLING} = -2$, $\text{STABLE} = 0$, $\text{RISING} = 2$, $\text{SURGING} = 4$
+- Horizon labeling:
+  - If $\text{ProjectedRisk}(t+1) \ge 85$: `CRITICAL_THRESHOLD_LIKELY_WITHIN_NEXT_ACTION`
+  - Else if $\text{ProjectedRisk}(t+2) \ge 85$: `CRITICAL_THRESHOLD_LIKELY_WITHIN_2_ACTIONS`
+  - Else if $\text{ProjectedRisk}(t+3) \ge 85$: `CRITICAL_THRESHOLD_LIKELY_WITHIN_3_ACTIONS`
+  - Else: `TRAJECTORY_STABLE_WITHIN_NORMAL_BOUNDS`
+
+### 10.4 Intervention Cost vs. Delay Risk Model
+- **Intervention Cost**: Measures workflow interruption and human operational burden (`LOW`, `MEDIUM`, `HIGH`). Reversible reads incur LOW cost; workflow pauses for review incur MEDIUM cost; halting critical processes incurs HIGH cost.
+- **Delay Risk**: Evaluates potential catastrophic impact if action is permitted to proceed unchecked.
+- **Decision Principle**: Sentinel intervenes when $\text{DelayRisk} > \text{ImmediateInterventionCost}$.
+
+### 10.5 Counterfactual Analysis
+For every intervention evaluation, Sentinel computes three deterministic simulation paths:
+- **`EARLY`**: Pre-emptive block. Risk prevented: Moderate; Disruption: High; Cost: High.
+- **`RECOMMENDED`**: Optimal inflection point. Risk prevented: High; Disruption: Low/Medium; Cost: Low/Medium.
+- **`LATE`**: Reactive cleanup post-breach. Risk prevented: Low; Blast-radius: Severe; Cost: High.
+
+### 10.6 Human Review Lifecycle
+When an action yields `CONFIRM`:
+1. Sentinel pauses autonomous execution and registers a `PendingInterventionRecord` (`PENDING`).
+2. Security operators review the alert via Simple Mode or Expert Mode in the Intervention Console.
+3. Operators execute one of three decisions:
+   - `ALLOW_ONCE`: Marks review `APPROVED`, permitting the single action.
+   - `DENY`: Marks review `DENIED`, halting the action while preserving the session.
+   - `REVOKE_SESSION`: Marks review `DENIED` and transitions the parent session to `REVOKED`.
 
 ---
 
-## 11. Database Integration Plan (Phase 2 Completed)
+## 11. Database Integration Plan (Phase 2 & Phase 4)
 * **Target Engine**: Supabase (PostgreSQL with Row Level Security) with automatic local-disk fallback and in-memory test repositories.
 * **Storage Schema**:
   * `agents`: Registered agents, model IDs, owner IDs, assigned scopes.
   * `sessions`: Runtime sessions, aggregate risk scores, trajectory deviation, risk velocity/acceleration, trajectory state.
   * `action_events`: Discrete tool invocations, parameters, target classifications, trajectory snapshots.
   * `audit_trail`: Append-only, cryptographically hashed event records.
+  * `interventions`: Pending and resolved human review alerts, window determinations, forecasts, and counterfactuals.
+  * `human_decisions`: Recorded operator decisions, review reasons, and resolution timestamps.
 
 ---
 
@@ -307,8 +377,8 @@ $$\text{currentRisk}_t = \min\left(100, \max\left(0.5 \cdot \text{actionRisk}_t 
 * **Phase 1 (Completed)**: Core agent identity registry, session management, action ingestion pipeline, in-memory repository abstractions, scope authorization engine, deterministic policy decisions (`ALLOW`, `MONITOR`, `WARN`, `CONFIRM`, `BLOCK`), external agent demo simulation (`scripts/demo-external-agent.ts`), and frontend views for Agents, Sessions, and Live Actions stream.
 * **Phase 2 (Completed)**: Supabase PostgreSQL database integration, local-disk fallback, append-only immutable audit trail with cryptographic hash chaining, and real-time persistence status UI.
 * **Phase 3 (Completed)**: Trajectory Intelligence & Cumulative Risk Engine: 10 explainable behavioral features, configurable deterministic baseline, weighted trajectory deviation formula, cumulative session risk engine with velocity/acceleration, 6 deterministic test scenarios, interactive trajectory timeline graph, and dual Simple/Expert modes.
-* **Phase 4 (Next)**: Intervention Intelligence Engine, optimal intervention window computation (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`), and human-in-the-loop review workflow.
-* **Phase 5**: Full Gemini API integration, live agent scenario lab, counterfactual simulations, and presentation polish.
+* **Phase 4 (Completed)**: Intervention Intelligence Engine, optimal intervention window computation (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`), deterministic risk forecast formula, intervention cost trade-off, counterfactual path simulation, human review queue and API orchestration, enhanced SVG risk trajectory graph with forecast projection, and Scenario 7 "Right Moment to Intervene".
+* **Phase 5 (Next)**: Full Gemini API live agent integration, interactive agent tool invocation lab, and presentation polish.
 
 ---
 

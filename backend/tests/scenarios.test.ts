@@ -13,8 +13,8 @@ describe('Deterministic Behavioral Scenarios', () => {
     if (actionEventRepository.clear) await actionEventRepository.clear();
   });
 
-  it('provides 6 distinct deterministic scenarios', () => {
-    expect(SCENARIO_DEFINITIONS).toHaveLength(6);
+  it('provides 7 distinct deterministic scenarios', () => {
+    expect(SCENARIO_DEFINITIONS).toHaveLength(7);
     const ids = SCENARIO_DEFINITIONS.map(s => s.id);
     expect(ids).toEqual([
       'NORMAL_RESEARCH',
@@ -22,7 +22,8 @@ describe('Deterministic Behavioral Scenarios', () => {
       'SENSITIVE_DATA_ACCESS',
       'PRIVILEGE_ESCALATION',
       'DESTRUCTIVE_SEQUENCE',
-      'LEGITIMATE_UNUSUAL_BEHAVIOR'
+      'LEGITIMATE_UNUSUAL_BEHAVIOR',
+      'RIGHT_MOMENT_TO_INTERVENE'
     ]);
   });
 
@@ -70,6 +71,26 @@ describe('Deterministic Behavioral Scenarios', () => {
     expect(result.trajectory.currentRisk).toBeLessThan(75);
   });
 
+  it('runs RIGHT_MOMENT_TO_INTERVENE: clearly demonstrates OPTIMAL_WINDOW and intervention forecast', async () => {
+    const result = await runScenario('RIGHT_MOMENT_TO_INTERVENE');
+    expect(result.results).toHaveLength(7);
+    expect(result.intervention).toBeDefined();
+    expect(result.forecast).toBeDefined();
+    expect(result.counterfactual).toBeDefined();
+
+    // Early steps are TOO_EARLY
+    expect(result.results[0].window).toBe('TOO_EARLY');
+    // Middle steps detect OPTIMAL_WINDOW
+    const optimalStep = result.results.find(r => r.window === 'OPTIMAL_WINDOW');
+    expect(optimalStep).toBeDefined();
+    expect(optimalStep?.decision).toBe('CONFIRM');
+
+    // Final destructive action reaches TOO_LATE and is BLOCKED
+    const finalStep = result.results[result.results.length - 1];
+    expect(finalStep.window).toBe('TOO_LATE');
+    expect(finalStep.decision).toBe('BLOCK');
+  });
+
   describe('Scenario API endpoints', () => {
     it('GET /api/v1/scenarios returns all scenarios', async () => {
       const res = await request(app)
@@ -77,7 +98,7 @@ describe('Deterministic Behavioral Scenarios', () => {
         .expect(200);
 
       expect(res.body.scenarios).toBeDefined();
-      expect(res.body.scenarios).toHaveLength(6);
+      expect(res.body.scenarios).toHaveLength(7);
       expect(res.body.scenarios[0].id).toBe('NORMAL_RESEARCH');
     });
 

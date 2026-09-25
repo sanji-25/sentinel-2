@@ -14,9 +14,9 @@ import { SCENARIOS, runScenario } from '../backend/src/modules/scenarios/index.j
 
 async function runAllScenarios() {
   console.log('\n============================================================');
-  console.log(' SENTINEL 2.0 — PHASE 3 TRAJECTORY INTELLIGENCE SCENARIOS');
+  console.log(' SENTINEL 2.0 — BEHAVIORAL SCENARIOS & INTERVENTION LAB');
   console.log('============================================================');
-  console.log('Evaluating behavioral drift, cumulative risk, velocity & acceleration\n');
+  console.log('Evaluating behavioral drift, cumulative risk, intervention windows & forecast\n');
 
   for (const [key, scenario] of Object.entries(SCENARIOS)) {
     console.log(`------------------------------------------------------------`);
@@ -38,16 +38,19 @@ async function runAllScenarios() {
           `  [Step ${i + 1}/${result.results.length}] ${step.action} ${step.resource}`
         );
         console.log(
-          `    Authz: ${step.authorization.padEnd(12)} | Decision: ${step.decision.padEnd(8)} | Risk: ${step.risk.toString().padStart(2)}/100 | Dev: ${step.trajectoryDeviation.toString().padStart(2)}/100 | State: [${step.state}]`
+          `    Authz: ${step.authorization.padEnd(12)} | Decision: ${step.decision.padEnd(8)} | Risk: ${step.risk.toString().padStart(2)}/100 | Dev: ${step.trajectoryDeviation.toString().padStart(2)}/100 | Window: [${step.window || 'N/A'}]`
         );
       }
 
-      console.log(`Final Telemetry:`);
+      console.log(`Final Telemetry & Intervention Analysis:`);
       console.log(`  Current Risk        : ${result.finalTelemetry.currentRisk}/100`);
       console.log(`  Trajectory Deviation: ${result.finalTelemetry.trajectoryDeviation}/100`);
       console.log(`  Risk Velocity       : ${result.finalTelemetry.riskVelocity}`);
       console.log(`  Risk Acceleration   : ${result.finalTelemetry.riskAcceleration}`);
       console.log(`  Trajectory State    : [${result.finalTelemetry.state}]`);
+      console.log(`  Intervention Window : [${result.intervention.interventionWindow}]`);
+      console.log(`  Predicted Next Risk : ${result.forecast.nextActionRisk}/100 (${result.forecast.horizonLabel})`);
+      console.log(`  Optimal Rationale   : ${result.counterfactual.optimalRationale}`);
       console.log(`  Expected State      : [${scenario.expectedFinalState}]`);
       console.log(`\n`);
     } catch (err) {
@@ -56,7 +59,7 @@ async function runAllScenarios() {
   }
 
   console.log('============================================================');
-  console.log(' ALL 6 DETERMINISTIC SCENARIOS EXECUTED SUCCESSFULLY');
+  console.log(' ALL DETERMINISTIC SCENARIOS EXECUTED SUCCESSFULLY');
   console.log('============================================================\n');
 }
 
