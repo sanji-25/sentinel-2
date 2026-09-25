@@ -129,6 +129,25 @@ export class LocalSessionRepository implements SessionRepository {
  * Supabase PostgreSQL Session Repository
  */
 export class SupabaseSessionRepository implements SessionRepository {
+  private mapRowToSession(data: any): Session {
+    const metadata = data.metadata || {};
+    return {
+      id: data.id,
+      agentId: data.agent_id,
+      status: data.status,
+      startedAt: data.started_at,
+      endedAt: data.ended_at || undefined,
+      currentRisk: Number(data.current_risk) || 0,
+      trajectoryDeviation: Number(data.trajectory_deviation) || 0,
+      actionCount: Number(data.action_count) || 0,
+      riskDelta: data.risk_delta !== undefined ? Number(data.risk_delta) : (metadata.riskDelta ?? 0),
+      riskVelocity: data.risk_velocity || metadata.riskVelocity || 'LOW',
+      riskAcceleration: data.risk_acceleration || metadata.riskAcceleration || 'STABLE',
+      trajectoryState: data.trajectory_state || metadata.trajectoryState || 'NORMAL',
+      metadata
+    };
+  }
+
   async findById(id: string): Promise<Session | null> {
     const client = supabaseClient.getClient();
     if (!client) {
@@ -146,18 +165,7 @@ export class SupabaseSessionRepository implements SessionRepository {
     }
 
     if (!data) return null;
-
-    return {
-      id: data.id,
-      agentId: data.agent_id,
-      status: data.status,
-      startedAt: data.started_at,
-      endedAt: data.ended_at || undefined,
-      currentRisk: Number(data.current_risk) || 0,
-      trajectoryDeviation: Number(data.trajectory_deviation) || 0,
-      actionCount: Number(data.action_count) || 0,
-      metadata: data.metadata || {}
-    };
+    return this.mapRowToSession(data);
   }
 
   async findByAgentId(agentId: string): Promise<Session[]> {
@@ -176,17 +184,7 @@ export class SupabaseSessionRepository implements SessionRepository {
       handleDatabaseError(error, 'sessions.findByAgentId');
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      agentId: row.agent_id,
-      status: row.status,
-      startedAt: row.started_at,
-      endedAt: row.ended_at || undefined,
-      currentRisk: Number(row.current_risk) || 0,
-      trajectoryDeviation: Number(row.trajectory_deviation) || 0,
-      actionCount: Number(row.action_count) || 0,
-      metadata: row.metadata || {}
-    }));
+    return (data || []).map((row: any) => this.mapRowToSession(row));
   }
 
   async findAll(): Promise<Session[]> {
@@ -204,17 +202,7 @@ export class SupabaseSessionRepository implements SessionRepository {
       handleDatabaseError(error, 'sessions.findAll');
     }
 
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      agentId: row.agent_id,
-      status: row.status,
-      startedAt: row.started_at,
-      endedAt: row.ended_at || undefined,
-      currentRisk: Number(row.current_risk) || 0,
-      trajectoryDeviation: Number(row.trajectory_deviation) || 0,
-      actionCount: Number(row.action_count) || 0,
-      metadata: row.metadata || {}
-    }));
+    return (data || []).map((row: any) => this.mapRowToSession(row));
   }
 
   async create(session: Session): Promise<Session> {
@@ -222,6 +210,14 @@ export class SupabaseSessionRepository implements SessionRepository {
     if (!client) {
       throw new Error('Supabase client unavailable');
     }
+
+    const metadata = {
+      ...(session.metadata || {}),
+      riskDelta: session.riskDelta ?? 0,
+      riskVelocity: session.riskVelocity ?? 'LOW',
+      riskAcceleration: session.riskAcceleration ?? 'STABLE',
+      trajectoryState: session.trajectoryState ?? 'NORMAL'
+    };
 
     const row = {
       id: session.id,
@@ -232,7 +228,7 @@ export class SupabaseSessionRepository implements SessionRepository {
       current_risk: session.currentRisk,
       trajectory_deviation: session.trajectoryDeviation,
       action_count: session.actionCount || 0,
-      metadata: session.metadata || {}
+      metadata
     };
 
     const { data, error } = await client
@@ -245,17 +241,7 @@ export class SupabaseSessionRepository implements SessionRepository {
       handleDatabaseError(error, 'sessions.create');
     }
 
-    return {
-      id: data.id,
-      agentId: data.agent_id,
-      status: data.status,
-      startedAt: data.started_at,
-      endedAt: data.ended_at || undefined,
-      currentRisk: Number(data.current_risk) || 0,
-      trajectoryDeviation: Number(data.trajectory_deviation) || 0,
-      actionCount: Number(data.action_count) || 0,
-      metadata: data.metadata || {}
-    };
+    return this.mapRowToSession(data);
   }
 
   async update(session: Session): Promise<Session> {
@@ -264,13 +250,21 @@ export class SupabaseSessionRepository implements SessionRepository {
       throw new Error('Supabase client unavailable');
     }
 
+    const metadata = {
+      ...(session.metadata || {}),
+      riskDelta: session.riskDelta ?? 0,
+      riskVelocity: session.riskVelocity ?? 'LOW',
+      riskAcceleration: session.riskAcceleration ?? 'STABLE',
+      trajectoryState: session.trajectoryState ?? 'NORMAL'
+    };
+
     const row = {
       status: session.status,
       ended_at: session.endedAt || null,
       current_risk: session.currentRisk,
       trajectory_deviation: session.trajectoryDeviation,
       action_count: session.actionCount || 0,
-      metadata: session.metadata || {}
+      metadata
     };
 
     const { data, error } = await client
@@ -284,17 +278,7 @@ export class SupabaseSessionRepository implements SessionRepository {
       handleDatabaseError(error, 'sessions.update');
     }
 
-    return {
-      id: data.id,
-      agentId: data.agent_id,
-      status: data.status,
-      startedAt: data.started_at,
-      endedAt: data.ended_at || undefined,
-      currentRisk: Number(data.current_risk) || 0,
-      trajectoryDeviation: Number(data.trajectory_deviation) || 0,
-      actionCount: Number(data.action_count) || 0,
-      metadata: data.metadata || {}
-    };
+    return this.mapRowToSession(data);
   }
 }
 

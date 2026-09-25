@@ -158,10 +158,11 @@ npm run build:shared
 | `npm run typecheck` | Runs strict TypeScript compiler check across all packages |
 | `npm test` | Executes backend, frontend, and system unit/integration tests |
 | `npm run demo` | Simulates an external AI agent lifecycle against the live REST API |
+| `npm run scenario` | Executes all 6 deterministic behavioral trajectory test scenarios |
 
 ---
 
-## 8. Verifying the Health & Phase 1 Endpoints
+## 8. Verifying Health, Trajectory & Scenarios
 With the backend running:
 
 ### Health Check
@@ -182,11 +183,30 @@ To see Sentinel 2.0 in action with an external AI agent simulating real actions:
 npm run demo
 ```
 
-For complete REST API documentation including `POST /api/v1/agents`, `POST /api/v1/sessions`, and `POST /api/v1/actions`, see [Phase 1 API Specification](docs/api.md).
+### Deterministic Behavioral Scenarios
+To run all 6 benchmark trajectory scenarios through the cumulative risk engine:
+```bash
+npm run scenario
+```
+
+For complete REST API documentation including `GET /api/v1/sessions/:id/trajectory` and `POST /api/v1/scenarios/:id/run`, see [API Specification](docs/api.md).
 
 ---
 
-## 9. UI/UX Design Direction: "Pixel-Inspired Security Control Center"
+## 9. Trajectory Intelligence & Cumulative Risk Engine
+> *This is a transparent prototype risk model, not a trained ML prediction system.*
+
+Phase 3 introduces behavioral sequence awareness:
+* **Domain Model**: Sequences belong to `(agent_id, session_id)` pairs.
+* **10 Explainable Features**: Normalized (0–100) metrics covering novelty, expansion, sensitivity escalation, sequence deviations, and velocity.
+* **Cumulative Risk**: Multi-action decaying memory equation yielding current risk, delta, velocity (`LOW`, `MEDIUM`, `HIGH`, `EXTREME`), and acceleration (`FALLING`, `STABLE`, `RISING`, `SURGING`).
+* **Trajectory States**: `NORMAL` (0–30), `WATCH` (31–50), `DRIFTING` (51–70), `ESCALATING` (71–85), `CRITICAL` (86–100).
+* **Dual Experience Modes**: Simple Mode translates deviation into plain English ("Why is Sentinel observing?"), while Expert Mode breaks down mathematical components.
+* **Phase 4 Demarcation**: Phase 3 outputs signals; Phase 4 consumes them for optimal intervention windowing (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`).
+
+---
+
+## 10. UI/UX Design Direction: "Pixel-Inspired Security Control Center"
 Sentinel 2.0 uses a distinct visual language designed for clarity and focus:
 * **Tactile Surfaces**: Cards with crisp borders and soft elevation (`card-tactile`).
 * **Purposeful Shapes**: Smooth container radii (`rounded-2xl`) and status pills (`rounded-full`).
@@ -198,24 +218,24 @@ Sentinel 2.0 uses a distinct visual language designed for clarity and focus:
 
 ---
 
-## 10. Security Principles
+## 11. Security Principles
 * **Backend Validation**: The client UI is purely for visualization. Security and intervention decisions are computed and validated exclusively on the backend.
 * **Credentials Kept Server-Side**: Gemini API keys and Supabase service keys are server-only. They are never transmitted to the frontend bundle.
 * **Zero Hardcoded Secrets**: Secrets are loaded from `.env` files which are strictly excluded by `.gitignore`.
 
 ---
 
-## 11. Current Implementation Status
+## 12. Current Implementation Status
 - [x] **Phase 0**: Monorepo workspaces, design tokens, health endpoint, CI pipeline, testing harnesses
 - [x] **Phase 1**: Core agent identity registry, session management, action ingestion pipeline, deterministic policy decisions (`ALLOW`, `MONITOR`, `WARN`, `CONFIRM`, `BLOCK`), external agent simulation demo script, frontend views for Agents, Sessions, and Live Actions
-- [ ] *Phase 2 (Pending)*: Supabase database persistence & audit logging
-- [ ] *Phase 3 (Pending)*: Trajectory baseline & risk calculation engines
-- [ ] *Phase 4 (Pending)*: Intervention intelligence & human review queue
+- [x] **Phase 2**: Supabase PostgreSQL database persistence, local-disk fallback, append-only immutable audit trail with cryptographic hash chaining, persistence status UI
+- [x] **Phase 3**: Trajectory Intelligence & Cumulative Risk Engine: 10 explainable features, configurable baseline, weighted deviation formula, cumulative session risk, 6 deterministic test scenarios, interactive trajectory timeline graph, dual Simple/Expert modes
+- [ ] *Phase 4 (Next)*: Intervention intelligence & optimal intervention window calculation (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`)
 - [ ] *Phase 5 (Pending)*: Live Gemini agent scenario lab
 
 ---
 
-## 12. Remote Development Instructions
+## 13. Remote Development Instructions
 To reproduce this environment on a remote server, Antigravity Remote container, or GitHub Codespace:
 1. Ensure Node.js 20+ is installed: `node -v`
 2. Run `npm install`

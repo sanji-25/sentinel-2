@@ -190,6 +190,8 @@ Designed for non-technical stakeholders, managers, and hackathon evaluators. Sim
 
 ---
 
+---
+
 ## 8. Expert Mode
 Designed for AI security engineers, ML platform teams, and SecOps operators. Exposes:
 * Granular risk scores (0–100) decomposed into sensitivity, severity, velocity, and reversibility.
@@ -199,44 +201,118 @@ Designed for AI security engineers, ML platform teams, and SecOps operators. Exp
 
 ---
 
-## 9. Gemini Integration Plan (Target: Phase 1+)
+## 9. Trajectory Intelligence & Cumulative Risk Engine (Phase 3)
+
+> **Important Architectural Note:**
+> *This is a transparent prototype risk model, not a trained ML prediction system.*
+> Phase 3 generates the behavioral and risk telemetry signals (`trajectoryDeviation`, `currentRisk`, `riskDelta`, `riskVelocity`, `riskAcceleration`). Phase 4 will consume these signals to calculate the **Optimal Intervention Window** (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`).
+
+### 9.1 Trajectory Domain Model
+A Trajectory represents the ordered sequence of actions belonging to an `(agent_id, session_id)` pair. It models sequential dynamics rather than evaluating actions in isolation.
+
+Key properties tracked over session lifespan:
+- `actionCount`: Total sequential actions ingested.
+- `currentRisk`: Session-wide cumulative risk score (0–100).
+- `trajectoryDeviation`: Behavioral deviation from expected task baseline (0–100).
+- `riskDelta`: Rate of risk change from prior action step.
+- `riskVelocity`: Risk velocity category (`LOW`, `MEDIUM`, `HIGH`, `EXTREME`).
+- `riskAcceleration`: Rate of change of risk velocity (`FALLING`, `STABLE`, `RISING`, `SURGING`).
+- `trajectoryState`: Overall behavioral state (`NORMAL`, `WATCH`, `DRIFTING`, `ESCALATING`, `CRITICAL`).
+
+### 9.2 The 10 Explainable Trajectory Features
+For every ingested action, 10 transparent, normalized (0–100) features are evaluated against the agent's baseline and session history:
+
+1. **Resource Novelty** (`0–100`): Evaluates ratio of unobserved resources accessed relative to total session actions.
+2. **Scope Expansion** (`0–100`): Measures attempts to access scopes outside granted or baseline scopes.
+3. **Sensitivity Escalation** (`0–100`): Tracks upward leaps in data sensitivity (LOW → MEDIUM → HIGH → CRITICAL).
+4. **Action Type Change** (`0–100`): Quantifies shifts in verbs (e.g. from read-only inspection to write/export/delete).
+5. **Authorization Failures** (`0–100`): Frequency and weight of `UNAUTHORIZED` decisions across the timeline.
+6. **Action Velocity** (`0–100`): Detects unnatural machine-speed action bursts (< 250ms inter-action latency).
+7. **Resource Diversity** (`0–100`): Breadth of distinct target entities across domains.
+8. **Cross-Boundary Access** (`0–100`): Probing across distinct namespace boundaries (e.g. docs → payroll → credentials).
+9. **Destructive Action Presence** (`0–100`): Frequency and severity of irreversible operations (`DELETE`, drops).
+10. **Sequence Deviation** (`0–100`): Structural divergence from expected operational sequence stages.
+
+### 9.3 Configurable Deterministic Baseline
+Each agent profile maps to an `AgentBaselineConfig`:
+- `expectedScopes`: Set of authorized scopes for standard operation.
+- `expectedResourceTypes`: Whitelisted entity types (e.g., `['document', 'source_code']`).
+- `expectedActions`: Normal operational verbs (e.g., `['READ', 'SEARCH', 'WRITE']`).
+- `maxExpectedSensitivity`: Ceiling expected for normal operation (`LOW` or `MEDIUM`).
+- `expectedSequence`: Canonical ordered workflow phases.
+- `expectedResourcePrefixes`: Standard resource namespaces (e.g., `['docs/', 'reports/']`).
+
+### 9.4 Trajectory Deviation Formula
+Trajectory deviation is computed via transparent, configurable weighted additive components:
+
+$$\text{trajectoryDeviation} = \min\left(100, \sum_{i} \text{feature}_i \times w_i\right)$$
+
+Default Weights:
+- Scope Expansion: `0.20`
+- Resource Novelty: `0.15`
+- Sequence Deviation: `0.15`
+- Sensitivity Escalation: `0.15`
+- Cross-Boundary Access: `0.15`
+- Destructive Behavior: `0.10`
+- Authorization Failures: `0.05`
+- Velocity Change: `0.05`
+*(Total weights sum to 1.00; maximum deviation is 100)*
+
+### 9.5 Cumulative Risk Engine
+Action risk does not reset between steps. The cumulative session risk formula balances memory carry-over with immediate action severity and trajectory deviation:
+
+$$\text{currentRisk}_t = \min\left(100, \max\left(0.5 \cdot \text{actionRisk}_t + 0.5 \cdot \text{dev}_t,\; 0.55 \cdot \text{risk}_{t-1} + 0.45 \cdot \text{actionRisk}_t + 0.35 \cdot \text{dev}_t\right)\right)$$
+
+- $\text{riskDelta} = \text{currentRisk}_t - \text{currentRisk}_{t-1}$
+- $\text{deltaChange} = \text{riskDelta}_t - \text{riskDelta}_{t-1}$
+- **Velocity**: $\text{riskDelta} > 30 \implies \text{EXTREME}$, $> 15 \implies \text{HIGH}$, $> 5 \implies \text{MEDIUM}$, else $\text{LOW}$.
+- **Acceleration**: $\text{deltaChange} > 20 \implies \text{SURGING}$, $> 5 \implies \text{RISING}$, $< -5 \implies \text{FALLING}$, else $\text{STABLE}$.
+
+### 9.6 Trajectory States
+- `NORMAL` (0–30): Agent operates within normal baseline boundaries.
+- `WATCH` (31–50): Minor novelties or benign deviations detected; telemetric observation heightened.
+- `DRIFTING` (51–70): Sustained departures in scope or action sequence; preparation for intervention.
+- `ESCALATING` (71–85): High risk velocity, sensitive boundary crossing, or authorization failures.
+- `CRITICAL` (86–100): Severe privilege escalation attempts or destructive sequences.
+
+---
+
+## 10. Gemini Integration Plan (Target: Phase 1+)
 * **External AI Agent Model**: Gemini 1.5 Pro and Gemini 1.5 Flash via official `@google/genai` or `@google/generative-ai` SDK.
 * **Server-Side Security**: All Gemini API keys, prompt templates, and execution tokens remain exclusively on the backend. No keys are ever delivered to the client.
 * **Proxy Architecture**: The Gemini agent invokes tool calls via Sentinel's control endpoint. Sentinel processes the call through the intelligence pipeline before either delegating to the actual target tool or halting execution.
 
 ---
 
-## 10. Database Integration Plan (Target: Phase 2)
-* **Target Engine**: Supabase (PostgreSQL with Row Level Security).
+## 11. Database Integration Plan (Phase 2 Completed)
+* **Target Engine**: Supabase (PostgreSQL with Row Level Security) with automatic local-disk fallback and in-memory test repositories.
 * **Storage Schema**:
   * `agents`: Registered agents, model IDs, owner IDs, assigned scopes.
-  * `sessions`: Runtime sessions, aggregate risk scores, start/end timestamps.
-  * `action_events`: Discrete tool invocations, parameters, target classifications.
-  * `risk_evaluations`: Component scores, deviation values, intervention decisions.
-  * `human_reviews`: Approval requests, reviewer identities, resolution decisions.
-* **Migration Strategy**: Version-controlled SQL migration scripts under `backend/src/database/migrations/`.
+  * `sessions`: Runtime sessions, aggregate risk scores, trajectory deviation, risk velocity/acceleration, trajectory state.
+  * `action_events`: Discrete tool invocations, parameters, target classifications, trajectory snapshots.
+  * `audit_trail`: Append-only, cryptographically hashed event records.
 
 ---
 
-## 11. Security Principles
+## 12. Security Principles
 1. **Zero-Trust Client**: The frontend is strictly a visualization and review interface. The backend never accepts client-asserted risk scores, agent identities, or decisions.
 2. **Fail-Closed Default**: In the event of an internal engine timeout or network failure during high-risk evaluation, Sentinel defaults to `CONFIRM` or `BLOCK`.
 3. **No Hardcoded Secrets**: All credentials and environment configurations are injected via environment variables; version control strictly rejects secrets.
-4. **Reversibility Weighting**: Non-reversible actions (e.g., file deletion, database drops, cloud infrastructure modification) carry a heavy penalty in the Intervention Engine.
+4. **Reversibility Weighting**: Non-reversible actions carry heavy penalties in trajectory deviation and cumulative risk.
 
 ---
 
-## 12. Phased Development Plan
-* **Phase 0 (Completed)**: Foundational architecture, monorepo workspaces, shared vocabulary, UI design system ("Pixel-inspired control center"), health endpoints, CI pipeline, testing harnesses, and comprehensive documentation.
+## 13. Phased Development Plan
+* **Phase 0 (Completed)**: Foundational architecture, monorepo workspaces, shared vocabulary, UI design system ("Pixel-inspired control center"), health endpoints, CI pipeline, testing harnesses.
 * **Phase 1 (Completed)**: Core agent identity registry, session management, action ingestion pipeline, in-memory repository abstractions, scope authorization engine, deterministic policy decisions (`ALLOW`, `MONITOR`, `WARN`, `CONFIRM`, `BLOCK`), external agent demo simulation (`scripts/demo-external-agent.ts`), and frontend views for Agents, Sessions, and Live Actions stream.
-* **Phase 2 (Next)**: Supabase database integration, persistent audit logging, and historical session queries.
-* **Phase 3**: Trajectory engine, statistical baseline drift detection, and multi-factor quantitative risk scoring.
-* **Phase 4**: Intervention intelligence engine, optimal window computation, and live human approval workflow.
+* **Phase 2 (Completed)**: Supabase PostgreSQL database integration, local-disk fallback, append-only immutable audit trail with cryptographic hash chaining, and real-time persistence status UI.
+* **Phase 3 (Completed)**: Trajectory Intelligence & Cumulative Risk Engine: 10 explainable behavioral features, configurable deterministic baseline, weighted trajectory deviation formula, cumulative session risk engine with velocity/acceleration, 6 deterministic test scenarios, interactive trajectory timeline graph, and dual Simple/Expert modes.
+* **Phase 4 (Next)**: Intervention Intelligence Engine, optimal intervention window computation (`TOO_EARLY`, `OPTIMAL_WINDOW`, `TOO_LATE`), and human-in-the-loop review workflow.
 * **Phase 5**: Full Gemini API integration, live agent scenario lab, counterfactual simulations, and presentation polish.
 
 ---
 
-## 13. Remote Development Setup
+## 14. Remote Development Setup
 Sentinel 2.0 is built to run identically across local environments, Antigravity IDE, remote development containers, and cloud CI runners:
 * **OS-Agnostic**: All scripts use cross-platform node commands (`tsx`, `vitest`, `vite`) and POSIX-compatible npm scripts.
 * **Zero Machine Paths**: No hardcoded drive letters or user directories.

@@ -301,7 +301,116 @@ Base Gateway URL: `/api/v1`
 
 ---
 
-## 5. Health Check Endpoint
+## 5. Trajectory Intelligence & Risk Telemetry (Phase 3)
+
+### 5.1 Get Session Trajectory
+* **Endpoint**: `GET /api/v1/sessions/:id/trajectory`
+* **Description**: Returns detailed behavioral trajectory analysis, 10 normalized features, weighted deviation components, explanation text, and chronological action replay timeline.
+
+#### Response (`200 OK`)
+```json
+{
+  "sessionId": "sess_551ea40d8113",
+  "agentId": "gemini-research-assistant",
+  "actionCount": 5,
+  "currentRisk": 100,
+  "trajectoryDeviation": 87,
+  "riskDelta": 51,
+  "riskVelocity": "EXTREME",
+  "riskAcceleration": "SURGING",
+  "state": "CRITICAL",
+  "features": {
+    "resourceNovelty": 100,
+    "scopeExpansion": 90,
+    "sensitivityEscalation": 100,
+    "actionTypeChange": 90,
+    "authorizationFailures": 40,
+    "actionVelocity": 42,
+    "resourceDiversity": 36,
+    "crossBoundaryAccess": 90,
+    "destructiveActionPresence": 100,
+    "sequenceDeviation": 70
+  },
+  "components": {
+    "scopeExpansion": 18,
+    "resourceNovelty": 15,
+    "sequenceDeviation": 11,
+    "sensitivityEscalation": 15,
+    "crossBoundaryAccess": 14,
+    "destructiveBehavior": 10,
+    "authorizationFailures": 2,
+    "velocityChange": 2
+  },
+  "actions": [
+    {
+      "eventId": "evt_5d8f8b60a1cb3d42",
+      "timestamp": "2026-09-25T10:04:13.510Z",
+      "action": "READ",
+      "resource": "project-documents",
+      "resourceType": "document",
+      "risk": 12,
+      "trajectoryDeviation": 16,
+      "state": "NORMAL",
+      "decision": "ALLOW",
+      "reasons": ["accessing newly encountered resources outside the workflow"]
+    }
+  ],
+  "explanation": {
+    "simpleText": "Agent behavior is severely deviating from its expected task baseline.",
+    "plainReasons": [
+      "attempting to access sensitive or restricted system domains",
+      "requesting permissions beyond the initial task baseline",
+      "executing irreversible or destructive data modifications"
+    ]
+  },
+  "requestId": "req_e05da5b9639d6484"
+}
+```
+
+### 5.2 Get Session Risk Telemetry (Compact Polling)
+* **Endpoint**: `GET /api/v1/sessions/:id/risk`
+* **Description**: Returns lightweight risk telemetry for dashboard polling.
+
+#### Response (`200 OK`)
+```json
+{
+  "sessionId": "sess_551ea40d8113",
+  "agentId": "gemini-research-assistant",
+  "currentRisk": 100,
+  "trajectoryDeviation": 87,
+  "riskDelta": 51,
+  "riskVelocity": "EXTREME",
+  "riskAcceleration": "SURGING",
+  "state": "CRITICAL",
+  "actionCount": 5,
+  "lastUpdated": "2026-09-25T10:04:13.593Z",
+  "requestId": "req_d9c10f6aa7dc76dc"
+}
+```
+
+---
+
+## 6. Deterministic Behavioral Scenarios
+
+### 6.1 List Scenarios
+* **Endpoint**: `GET /api/v1/scenarios`
+* **Description**: Returns all 6 deterministic behavioral test scenarios.
+
+### 6.2 Execute Scenario
+* **Endpoint**: `POST /api/v1/scenarios/:id/run`
+* **Description**: Executes a scenario end-to-end and returns live step-by-step telemetry, trajectory, and final state.
+
+Available Scenarios:
+1. `NORMAL_RESEARCH`
+2. `GRADUAL_SCOPE_CREEP`
+3. `SENSITIVE_DATA_ACCESS`
+4. `PRIVILEGE_ESCALATION`
+5. `DESTRUCTIVE_SEQUENCE`
+6. `LEGITIMATE_UNUSUAL_BEHAVIOR`
+
+---
+
+## 7. Health Check Endpoint
 * **Endpoint**: `GET /api/health`
 * **Response (`200 OK`)**:
 ```json

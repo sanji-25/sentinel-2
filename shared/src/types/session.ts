@@ -1,3 +1,5 @@
+import { TrajectoryState, RiskVelocity, RiskAcceleration } from './trajectory.js';
+
 /**
  * Agent runtime session tracking
  */
@@ -15,6 +17,10 @@ export interface Session {
   currentRisk: number;
   trajectoryDeviation: number;
   actionCount?: number;
+  riskDelta?: number;
+  riskVelocity?: RiskVelocity;
+  riskAcceleration?: RiskAcceleration;
+  trajectoryState?: TrajectoryState;
   metadata?: Record<string, unknown>;
 }
 

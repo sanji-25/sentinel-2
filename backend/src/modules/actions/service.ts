@@ -15,6 +15,7 @@ import { SessionRepository, sessionRepository } from '../sessions/repository.js'
 import { ScopeAuthorizationService, scopeAuthorizationService } from '../authorization/service.js';
 import { PolicyDecisionService, policyDecisionService } from '../decisions/policy.service.js';
 import { AuditService, auditService as defaultAuditService } from '../audit/service.js';
+import { TrajectoryService, trajectoryService as defaultTrajectoryService } from '../trajectory/service.js';
 import {
   ValidationError,
   NotFoundError,
@@ -54,19 +55,22 @@ export class ActionIngestionService {
     private sessionRepo: SessionRepository = sessionRepository,
     private authzService: ScopeAuthorizationService = scopeAuthorizationService,
     private policyService: PolicyDecisionService = policyDecisionService,
-    private audit: AuditService = defaultAuditService
+    private audit: AuditService = defaultAuditService,
+    private trajectoryService: TrajectoryService = defaultTrajectoryService
   ) {}
 
   public setRepositories(
     actionRepo: ActionEventRepository,
     agentRepo?: AgentRepository,
     sessionRepo?: SessionRepository,
-    audit?: AuditService
+    audit?: AuditService,
+    trajectoryService?: TrajectoryService
   ): void {
     this.actionRepo = actionRepo;
     if (agentRepo) this.agentRepo = agentRepo;
     if (sessionRepo) this.sessionRepo = sessionRepo;
     if (audit) this.audit = audit;
+    if (trajectoryService) this.trajectoryService = trajectoryService;
   }
 
   async ingestAction(input: IngestActionInput, requestId = '-'): Promise<IngestActionResult> {
@@ -198,25 +202,59 @@ export class ActionIngestionService {
       metadata: input.metadata || {}
     };
 
-    // 14. Record Action Event
+    // 14. Evaluate Trajectory Features, Deviation, and Cumulative Risk
+    const pastActions = await this.actionRepo.findBySessionId(session.id);
+    const trajectoryEval = this.trajectoryService.evaluateActionTrajectory({
+      action: actionEvent,
+      actionHistory: pastActions,
+      agent,
+      session
+    });
+
+    // Attach trajectory snapshot to action metadata
+    actionEvent.metadata = {
+      ...(actionEvent.metadata || {}),
+      risk: trajectoryEval.currentRisk,
+      actionRisk: trajectoryEval.actionRisk,
+      trajectoryDeviation: trajectoryEval.trajectoryDeviation,
+      trajectoryState: trajectoryEval.state
+    };
+
+    // 15. Record Action Event
     await this.actionRepo.create(actionEvent);
 
-    // Update session action count
+    // 16. Update Session Telemetry
     session.actionCount = (session.actionCount || 0) + 1;
+    session.currentRisk = trajectoryEval.currentRisk;
+    session.trajectoryDeviation = trajectoryEval.trajectoryDeviation;
+    session.riskDelta = trajectoryEval.riskDelta;
+    session.riskVelocity = trajectoryEval.riskVelocity;
+    session.riskAcceleration = trajectoryEval.riskAcceleration;
+    session.trajectoryState = trajectoryEval.state;
+    session.metadata = {
+      ...(session.metadata || {}),
+      lastActionRisk: trajectoryEval.actionRisk,
+      trajectoryFeatures: trajectoryEval.features,
+      trajectoryComponents: trajectoryEval.components,
+      trajectoryReasons: trajectoryEval.plainReasons,
+      lastState: trajectoryEval.state
+    };
     await this.sessionRepo.update(session);
 
-    // 15. Produce Basic Policy Decision
+    // 17. Produce Basic Policy Decision
     const decision: PolicyDecision = this.policyService.evaluate({
       event: actionEvent,
       agentName: agent.name
     });
 
-    // 16. Structured Log of Action Ingestion
+    actionEvent.metadata.decision = decision;
+
+    // 18. Structured Log of Action Ingestion
     console.log(
-      `[ACTION_INGESTION] [${requestId}] agentId=${agent.id} sessionId=${session.id} eventId=${eventId} action=${normalizedAction} resource=${resource} authz=${authorization} decision=${decision.action}`
+      `[ACTION_INGESTION] [${requestId}] agentId=${agent.id} sessionId=${session.id} eventId=${eventId} action=${normalizedAction} resource=${resource} authz=${authorization} decision=${decision.action} risk=${trajectoryEval.currentRisk} dev=${trajectoryEval.trajectoryDeviation} state=${trajectoryEval.state}`
     );
 
-    // 17. Audit Logging - ACTION_INGESTED
+    // 19. Audit Logging - ACTION_INGESTED
     await this.audit.logEvent({
       eventType: 'ACTION_INGESTED',
       entityType: 'action',
@@ -230,11 +268,14 @@ export class ActionIngestionService {
         scope,
         sensitivity: normalizedSensitivity,
         reversibility: normalizedReversibility,
-        authorization
+        authorization,
+        riskScore: trajectoryEval.currentRisk,
+        trajectoryDeviation: trajectoryEval.trajectoryDeviation,
+        trajectoryState: trajectoryEval.state
       }
     });
 
-    // 18. Audit Logging - Decision outcome
+    // 20. Audit Logging - Decision outcome
     const decisionEventMap: Record<string, AuditEventType> = {
       ALLOW: 'ACTION_ALLOWED',
       MONITOR: 'ACTION_MONITORED',
@@ -252,7 +293,10 @@ export class ActionIngestionService {
       actor: 'sentinel-policy-engine',
       payload: {
         decision: decision.action,
-        reason: decision.reason
+        reason: decision.reason,
+        riskScore: trajectoryEval.currentRisk,
+        trajectoryDeviation: trajectoryEval.trajectoryDeviation,
+        trajectoryState: trajectoryEval.state
       }
     });
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { sessionService } from '../../modules/sessions/service.js';
+import { trajectoryService } from '../../modules/trajectory/service.js';
 
 const router = Router();
 
@@ -65,6 +66,40 @@ router.post('/:id/end', async (req: Request, res: Response, next: NextFunction) 
     res.status(200).json({
       data: { session },
       session,
+      requestId: req.id
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/sessions/:id/trajectory
+ * Returns comprehensive trajectory analysis, features, deviation breakdown, and replay sequence
+ */
+router.get('/:id/trajectory', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const trajectory = await trajectoryService.getSessionTrajectory(req.params.id);
+    res.status(200).json({
+      data: trajectory,
+      ...trajectory,
+      requestId: req.id
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/sessions/:id/risk
+ * Returns compact risk telemetry suitable for polling
+ */
+router.get('/:id/risk', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const riskTelemetry = await trajectoryService.getSessionRiskTelemetry(req.params.id);
+    res.status(200).json({
+      data: riskTelemetry,
+      ...riskTelemetry,
       requestId: req.id
     });
   } catch (err) {

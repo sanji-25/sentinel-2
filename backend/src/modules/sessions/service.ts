@@ -53,6 +53,10 @@ export class SessionService {
       currentRisk: 0,
       trajectoryDeviation: 0,
       actionCount: 0,
+      riskDelta: 0,
+      riskVelocity: 'LOW',
+      riskAcceleration: 'STABLE',
+      trajectoryState: 'NORMAL',
       metadata: input.metadata || {}
     };
 
