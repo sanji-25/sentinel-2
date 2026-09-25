@@ -4,6 +4,7 @@ import { DecisionBadge } from '../../components/common/DecisionBadge';
 import { Activity, Gauge, GitBranch, Crosshair, Lock } from 'lucide-react';
 import { InterventionWindowStage } from '@sentinel/shared';
 import { useNavigation } from '../../stores/navigationContext';
+import { AgentConnectionStatus } from '../../components/common/AgentConnectionStatus';
 
 const INTERVENTION_STAGES: { stage: InterventionWindowStage; label: string; active?: boolean; optimal?: boolean }[] = [
   { stage: 'TOO_EARLY', label: '1. Too Early' },
@@ -19,6 +20,9 @@ export const ExpertOverview: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* AI Agent Connection Indicator */}
+      <AgentConnectionStatus />
+
       {/* Top Banner: Technical Telemetry */}
       <div className="card-tactile p-6 bg-surface-primary dark:bg-surface-primary border-slate-200 dark:border-slate-800">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">

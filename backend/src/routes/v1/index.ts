@@ -7,6 +7,7 @@ import { systemRouter } from './system.route.js';
 import { scenariosRouter } from './scenarios.route.js';
 import { interventionsRouter } from './interventions.route.js';
 import { evaluationRouter } from './evaluation.route.js';
+import { liveAgentRouter } from './live-agent.route.js';
 
 const v1Router = Router();
 
@@ -18,5 +19,6 @@ v1Router.use('/system', systemRouter);
 v1Router.use('/scenarios', scenariosRouter);
 v1Router.use('/interventions', interventionsRouter);
 v1Router.use('/evaluation', evaluationRouter);
+v1Router.use('/live-agent', liveAgentRouter);
 
 export { v1Router };

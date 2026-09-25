@@ -4,6 +4,7 @@ import { MetricCard } from '../../components/common/MetricCard';
 import { ShieldCheck, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { SimpleModeStatus } from '@sentinel/shared';
 import { useNavigation } from '../../stores/navigationContext';
+import { AgentConnectionStatus } from '../../components/common/AgentConnectionStatus';
 
 interface AgentOverviewItem {
   id: string;
@@ -50,6 +51,9 @@ export const SimpleOverview: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* AI Agent Connection Indicator */}
+      <AgentConnectionStatus />
+
       {/* Primary Status Banner - Answering "What is happening? Is it safe? Do I need to do something?" */}
       <div className="card-tactile p-6 sm:p-8 bg-gradient-to-r from-surface-primary to-surface-50 dark:from-surface-primary dark:to-surface-850 border-slate-200 dark:border-slate-800">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

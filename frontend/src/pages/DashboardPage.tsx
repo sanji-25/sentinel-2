@@ -11,8 +11,9 @@ import { TrajectoryView } from '../features/trajectory/TrajectoryView';
 import { InterventionsView } from '../features/interventions/InterventionsView';
 import { ScenarioLabView } from '../features/scenarios/ScenarioLabView';
 import { EvaluationView } from '../features/evaluation/EvaluationView';
+import { LiveAgentView } from '../features/live-agent/LiveAgentView';
 
-const CONTENT_TABS = ['agents', 'sessions', 'actions', 'audit', 'trajectory', 'interventions', 'scenarios', 'evaluation'] as const;
+const CONTENT_TABS = ['agents', 'sessions', 'actions', 'audit', 'trajectory', 'interventions', 'scenarios', 'evaluation', 'live-agent'] as const;
 
 export const DashboardPage: React.FC = () => {
   const { isSimple } = useMode();
@@ -28,6 +29,7 @@ export const DashboardPage: React.FC = () => {
       {activeTab === 'interventions' && <InterventionsView />}
       {activeTab === 'scenarios' && <ScenarioLabView />}
       {activeTab === 'evaluation' && <EvaluationView />}
+      {activeTab === 'live-agent' && <LiveAgentView />}
       {(activeTab === 'dashboard' || !CONTENT_TABS.includes(activeTab as typeof CONTENT_TABS[number])) && (
         isSimple ? <SimpleOverview /> : <ExpertOverview />
       )}

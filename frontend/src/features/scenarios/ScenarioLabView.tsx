@@ -4,6 +4,7 @@ import { interventionsApi } from '../../api/interventions.api';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
 import { DecisionBadge } from '../../components/common/DecisionBadge';
+import { AgentConnectionStatus } from '../../components/common/AgentConnectionStatus';
 import {
   FlaskConical,
   Play,
@@ -407,6 +408,9 @@ export const ScenarioLabView: React.FC = () => {
             Run any scenario to watch Sentinel evaluate an AI agent's trajectory in real-time.
             Each scenario demonstrates a different behavioral pattern and intervention timing decision.
           </p>
+        </div>
+        <div className="flex-shrink-0">
+          <AgentConnectionStatus compact />
         </div>
       </div>
 

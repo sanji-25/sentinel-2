@@ -8,7 +8,8 @@ import {
   FileText,
   Sliders,
   FlaskConical,
-  BarChart3
+  BarChart3,
+  Cpu
 } from 'lucide-react';
 
 import { useNavigation, NavigationTab } from '../../stores/navigationContext';
@@ -33,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'actions', label: 'Live Actions', icon: ShieldAlert },
   { id: 'trajectory', label: 'Trajectory', icon: GitBranch, groupHeader: 'Analyze' },
   { id: 'interventions', label: 'Interventions', icon: Sliders },
+  { id: 'live-agent', label: 'Live Agent (Gemini)', icon: Cpu, groupHeader: 'Integration' },
   { id: 'scenarios', label: 'Scenario Lab', icon: FlaskConical, groupHeader: 'Evaluate' },
   { id: 'evaluation', label: 'Evaluation', icon: BarChart3 },
   { id: 'audit', label: 'Audit Trail', icon: FileText },

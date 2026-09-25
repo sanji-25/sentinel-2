@@ -84,16 +84,18 @@ export class ActionIngestionService {
     }
 
     // 2. Validate agentId
-    if (!input.agentId || typeof input.agentId !== 'string' || input.agentId.trim().length === 0) {
+    const rawAgentId = input.agentId || (input as unknown as Record<string, unknown>)?.agent_id;
+    if (!rawAgentId || typeof rawAgentId !== 'string' || (rawAgentId as string).trim().length === 0) {
       throw new ValidationError('agentId is required and must be a non-empty string');
     }
-    const agentId = input.agentId.trim();
+    const agentId = (rawAgentId as string).trim();
 
     // 3. Validate sessionId
-    if (!input.sessionId || typeof input.sessionId !== 'string' || input.sessionId.trim().length === 0) {
+    const rawSessionId = input.sessionId || (input as unknown as Record<string, unknown>)?.session_id;
+    if (!rawSessionId || typeof rawSessionId !== 'string' || (rawSessionId as string).trim().length === 0) {
       throw new ValidationError('sessionId is required and must be a non-empty string');
     }
-    const sessionId = input.sessionId.trim();
+    const sessionId = (rawSessionId as string).trim();
 
     // 4. Validate action
     if (!input.action || typeof input.action !== 'string') {
@@ -111,8 +113,9 @@ export class ActionIngestionService {
       throw new ValidationError('resource is required and must be a non-empty string');
     }
     const resource = input.resource.trim();
-    const resourceType = input.resourceType && typeof input.resourceType === 'string'
-      ? input.resourceType.trim()
+    const rawResourceType = input.resourceType || (input as unknown as Record<string, unknown>)?.resource_type;
+    const resourceType = rawResourceType && typeof rawResourceType === 'string'
+      ? (rawResourceType as string).trim()
       : 'resource';
 
     // 6. Validate scope
