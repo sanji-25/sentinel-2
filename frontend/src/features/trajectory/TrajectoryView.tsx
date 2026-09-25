@@ -446,7 +446,7 @@ export const TrajectoryView: React.FC = () => {
                 </div>
 
                 <div className="space-y-2 pt-1">
-                  {Object.entries(trajectory.components).map(([compName, score]) => (
+                  {(Object.entries(trajectory.components) as [string, number][]).map(([compName, score]) => (
                     <div key={compName} className="space-y-1">
                       <div className="flex items-center justify-between text-xs font-medium">
                         <span className="text-slate-600 dark:text-slate-400 capitalize">
@@ -475,7 +475,7 @@ export const TrajectoryView: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
-                  {Object.entries(trajectory.features).map(([featName, val]) => (
+                  {(Object.entries(trajectory.features) as [string, number][]).map(([featName, val]) => (
                     <div
                       key={featName}
                       className="p-2 rounded-xl bg-surface-50 dark:bg-surface-800/40 border border-slate-100 dark:border-slate-800"

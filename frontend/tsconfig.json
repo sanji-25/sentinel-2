@@ -21,7 +21,9 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@sentinel/shared": ["../shared/src/index.ts"],
+      "@sentinel/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["src"],
