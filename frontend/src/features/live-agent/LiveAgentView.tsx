@@ -136,7 +136,7 @@ export const LiveAgentView: React.FC = () => {
       // 2. Step through actions iteratively
       let currentStatus: 'LIVE' | 'PAUSED' | 'BLOCKED' | 'COMPLETED' = 'LIVE';
       let stepNum = 0;
-      const maxSteps = 6;
+      const maxSteps = 7;
 
       while (stepNum < maxSteps && currentStatus === 'LIVE') {
         stepNum++;

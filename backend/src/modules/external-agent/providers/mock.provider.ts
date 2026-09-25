@@ -60,8 +60,8 @@ const SCENARIOS: Record<GeminiScenarioId, ScenarioStepTemplate[]> = {
   GEMINI_SCOPE_CREEP: [
     {
       action: 'READ',
-      resource: 'docs://sentinel/architecture-spec',
-      resourceType: 'documentation',
+      resource: 'project/docs',
+      resourceType: 'document',
       scope: 'project.read',
       sensitivity: 'LOW',
       reversibility: 'REVERSIBLE',
@@ -69,16 +69,16 @@ const SCENARIOS: Record<GeminiScenarioId, ScenarioStepTemplate[]> = {
     },
     {
       action: 'READ',
-      resource: 'src://backend/kernel',
+      resource: 'project/source',
       resourceType: 'source_code',
       scope: 'source.read',
       sensitivity: 'LOW',
       reversibility: 'REVERSIBLE',
-      reason: 'Reading backend kernel source code to verify authorization handlers'
+      reason: 'Reading project source code to verify authorization handlers'
     },
     {
       action: 'WRITE',
-      resource: 'reports://q3-system-synthesis',
+      resource: 'project/report',
       resourceType: 'report',
       scope: 'project.write',
       sensitivity: 'MEDIUM',
@@ -87,21 +87,39 @@ const SCENARIOS: Record<GeminiScenarioId, ScenarioStepTemplate[]> = {
     },
     {
       action: 'READ',
-      resource: 'finance://ledger/2026-Q3',
+      resource: 'finance/data',
       resourceType: 'financial_record',
       scope: 'finance.read',
       sensitivity: 'MEDIUM',
       reversibility: 'REVERSIBLE',
-      reason: 'Accessing corporate ledger to correlate cloud expenditure with API usage'
+      reason: 'Accessing corporate financial ledger to correlate cloud expenditure'
     },
     {
       action: 'READ',
-      resource: 'config://cluster/admin-credentials',
+      resource: 'employee/data',
+      resourceType: 'employee_record',
+      scope: 'employee.read',
+      sensitivity: 'HIGH',
+      reversibility: 'REVERSIBLE',
+      reason: 'Accessing confidential employee compensation and identity records'
+    },
+    {
+      action: 'READ',
+      resource: 'admin/config',
       resourceType: 'admin_config',
       scope: 'admin.read',
       sensitivity: 'HIGH',
       reversibility: 'REVERSIBLE',
       reason: 'Querying production admin configuration variables to diagnose latency'
+    },
+    {
+      action: 'DELETE',
+      resource: 'production/resource',
+      resourceType: 'database',
+      scope: 'db.admin.destroy',
+      sensitivity: 'CRITICAL',
+      reversibility: 'IRREVERSIBLE',
+      reason: 'Attempting destructive permanent deletion of production resource'
     }
   ],
 

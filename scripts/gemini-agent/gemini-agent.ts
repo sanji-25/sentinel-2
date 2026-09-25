@@ -215,33 +215,38 @@ Execute tool calls one step at a time as directed.`
     }> = [
       {
         tool: 'READ_PROJECT_DOCS',
-        description: 'READ project documentation',
-        args: { docPath: 'docs://sentinel/architecture-spec' }
+        description: 'READ project/docs',
+        args: { docPath: 'project/docs' }
       },
       {
         tool: 'READ_SOURCE_CODE',
-        description: 'READ source code',
-        args: { repoPath: 'src://backend/kernel' }
+        description: 'READ project/source',
+        args: { repoPath: 'project/source' }
       },
       {
         tool: 'WRITE_REPORT',
-        description: 'WRITE research report',
+        description: 'WRITE project/report',
         args: { title: 'Q3 Synthesis Report', content: 'Evaluation and architecture synthesis.' }
       },
       {
         tool: 'READ_FINANCE_DATA',
-        description: 'READ finance data',
-        args: { ledgerQuarter: '2026-Q3' }
+        description: 'READ finance/data',
+        args: { ledgerQuarter: 'finance/data' }
+      },
+      {
+        tool: 'READ_EMPLOYEE_DATA',
+        description: 'READ employee/data',
+        args: { employeeId: 'employee/data' }
       },
       {
         tool: 'ACCESS_ADMIN_CONFIG',
-        description: 'ACCESS admin configuration',
-        args: { configKey: 'cluster-admin-main' }
+        description: 'ACCESS admin/config',
+        args: { configKey: 'admin/config' }
       },
       {
         tool: 'DELETE_RESOURCE',
-        description: 'DELETE production resource',
-        args: { resourceUri: 'cluster://prod-us-east/primary-db', confirmation: true }
+        description: 'DELETE production/resource',
+        args: { resourceUri: 'production/resource', confirmation: true }
       }
     ];
 

@@ -179,7 +179,7 @@ describe('Gemini Sentinel Adapter & Runtime Governance (Phase 7)', () => {
     );
   });
 
-  it('8. DEMO_MODE works deterministically without API key', async () => {
+  it('8. DEMO_MODE works deterministically without API key across 7 canonical steps', async () => {
     const runner = new GeminiAgentRunner({
       sentinelUrl: baseUrl,
       demoMode: true
@@ -189,13 +189,54 @@ describe('Gemini Sentinel Adapter & Runtime Governance (Phase 7)', () => {
     const summary = await runner.run();
 
     expect(summary.mode).toBe('DEMO_MODE');
-    expect(summary.totalSteps).toBe(6);
+    expect(summary.totalSteps).toBe(7);
     expect(summary.steps[0].sentinelDecision).toBe('ALLOW');
     expect(summary.steps[1].sentinelDecision).toBe('ALLOW');
     expect(summary.steps[2].sentinelDecision).toBe('MONITOR');
     expect(summary.steps[3].sentinelDecision).toBe('CONFIRM');
     expect(summary.steps[4].sentinelDecision).toBe('CONFIRM');
-    expect(summary.steps[5].sentinelDecision).toBe('BLOCK');
+    expect(summary.steps[5].sentinelDecision).toBe('CONFIRM');
+    expect(summary.steps[6].sentinelDecision).toBe('BLOCK');
     expect(summary.executionHalted).toBe(true);
+  });
+
+  it('9. Human denial rejects action and sets executionAllowed to false', async () => {
+    const adapter = new GeminiSentinelAdapter({
+      sentinelBaseUrl: baseUrl,
+      grantedScopes: ['project.read'],
+      autoApproveConfirm: false // Simulates DENY
+    });
+
+    await adapter.initialize();
+
+    const result = await adapter.evaluateAndExecuteTool('READ_FINANCE_DATA', {
+      ledgerQuarter: '2026-Q3'
+    });
+
+    expect(result.decision).toBe('CONFIRM');
+    expect(result.allowed).toBe(false);
+    expect(result.stepLog.humanDecision).toBe('DENY');
+    expect(result.stepLog.executionAllowed).toBe(false);
+
+    await adapter.close();
+  });
+
+  it('10. Sentinel unavailable produces clean error without uncaught process crash', async () => {
+    const unreachableClient = new GeminiSentinelAdapter({
+      sentinelBaseUrl: 'http://127.0.0.1:59998/api/v1'
+    });
+
+    await expect(unreachableClient.initialize()).rejects.toThrow();
+  });
+
+  it('11. Gemini client configuration correctly configures models and modes', () => {
+    const runner = new GeminiAgentRunner({
+      sentinelUrl: baseUrl,
+      modelName: 'gemini-1.5-pro',
+      demoMode: true
+    });
+
+    expect(runner.getModeLabel()).toBe('DEMO MODE');
+    expect(runner.isLiveGemini()).toBe(false);
   });
 });

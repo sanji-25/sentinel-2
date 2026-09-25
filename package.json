@@ -19,8 +19,9 @@
     "typecheck": "npm run typecheck --workspace=@sentinel/shared && npm run typecheck --workspace=@sentinel/backend && npm run typecheck --workspace=@sentinel/frontend",
     "test": "npm run test --workspace=@sentinel/backend && npm run test --workspace=@sentinel/frontend",
     "demo": "tsx scripts/demo-external-agent.ts",
-    "demo:gemini": "tsx scripts/demo-gemini.ts",
-    "demo:mock": "tsx scripts/demo-gemini.ts --mock",
+    "demo:gemini": "tsx scripts/gemini-agent.ts",
+    "demo:mock": "tsx scripts/gemini-agent.ts --mock",
+    "gemini-agent": "tsx scripts/gemini-agent.ts",
     "scenario": "tsx scripts/demo-scenarios.ts"
   },
   "keywords": [

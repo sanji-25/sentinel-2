@@ -11,7 +11,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'read_project_docs',
     description: 'Read architectural documentation, product design notes, and project specifications.',
     action: 'READ',
-    resource: 'docs://sentinel/architecture-spec',
+    resource: 'project/docs',
     resourceType: 'documentation',
     scope: 'project.read',
     sensitivity: 'LOW',
@@ -19,7 +19,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     parameters: {
       docPath: {
         type: 'STRING',
-        description: 'Path or identifier of the document to read (e.g. docs://sentinel/architecture-spec)'
+        description: 'Path or identifier of the document to read (e.g. project/docs)'
       }
     }
   },
@@ -28,7 +28,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'read_source_code',
     description: 'Read source code modules from codebase repositories.',
     action: 'READ',
-    resource: 'src://backend/kernel',
+    resource: 'project/source',
     resourceType: 'source_code',
     scope: 'source.read',
     sensitivity: 'LOW',
@@ -45,7 +45,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'write_report',
     description: 'Publish or persist an analytical research or security synthesis report.',
     action: 'WRITE',
-    resource: 'reports://q3-system-synthesis',
+    resource: 'project/report',
     resourceType: 'report',
     scope: 'project.write',
     sensitivity: 'MEDIUM',
@@ -60,13 +60,27 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'read_finance_data',
     description: 'Query executive corporate ledger, payroll, or confidential financial records.',
     action: 'READ',
-    resource: 'finance://ledger/2026-executive-compensation',
+    resource: 'finance/data',
     resourceType: 'financial_record',
     scope: 'finance.read',
     sensitivity: 'MEDIUM',
     reversibility: 'REVERSIBLE',
     parameters: {
-      ledgerQuarter: { type: 'STRING', description: 'Financial quarter identifier (e.g. 2026-Q3)' }
+      ledgerQuarter: { type: 'STRING', description: 'Financial quarter identifier (e.g. finance/data)' }
+    }
+  },
+  READ_EMPLOYEE_DATA: {
+    name: 'READ_EMPLOYEE_DATA',
+    functionName: 'read_employee_data',
+    description: 'Query confidential employee records, identity vaults, or compensation databases.',
+    action: 'READ',
+    resource: 'employee/data',
+    resourceType: 'employee_record',
+    scope: 'employee.read',
+    sensitivity: 'HIGH',
+    reversibility: 'REVERSIBLE',
+    parameters: {
+      employeeId: { type: 'STRING', description: 'Employee identifier or path' }
     }
   },
   ACCESS_ADMIN_CONFIG: {
@@ -74,7 +88,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'access_admin_config',
     description: 'Inspect cluster configuration, IAM policies, or privileged administrative variables.',
     action: 'READ',
-    resource: 'config://cluster/admin-credentials',
+    resource: 'admin/config',
     resourceType: 'admin_config',
     scope: 'admin.read',
     sensitivity: 'HIGH',
@@ -88,9 +102,9 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'download_sensitive_data',
     description: 'Download or export sensitive customer datasets or telemetry archives.',
     action: 'DOWNLOAD',
-    resource: 'data://pii/customer-vault-export.tar',
+    resource: 'employee/data',
     resourceType: 'sensitive_data',
-    scope: 'data.export',
+    scope: 'employee.read',
     sensitivity: 'HIGH',
     reversibility: 'PARTIALLY_REVERSIBLE',
     parameters: {
@@ -102,7 +116,7 @@ export const GOVERNED_TOOLS: Record<GeminiToolName, GovernedToolDefinition> = {
     functionName: 'delete_resource',
     description: 'Irreversibly delete or destroy a cloud database cluster or production system resource.',
     action: 'DELETE',
-    resource: 'cluster://prod-us-east/primary-db',
+    resource: 'production/resource',
     resourceType: 'database',
     scope: 'db.admin.destroy',
     sensitivity: 'CRITICAL',
@@ -165,9 +179,20 @@ export function getGeminiFunctionDeclarations(): FunctionDeclaration[] {
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
-          ledgerQuarter: { type: SchemaType.STRING, description: 'Financial quarter identifier' }
+          ledgerQuarter: { type: SchemaType.STRING, description: 'Financial quarter or resource path' }
         },
         required: ['ledgerQuarter']
+      }
+    },
+    {
+      name: 'read_employee_data',
+      description: 'Query confidential employee records, identity vaults, or compensation databases.',
+      parameters: {
+        type: SchemaType.OBJECT,
+        properties: {
+          employeeId: { type: SchemaType.STRING, description: 'Employee identifier or resource path' }
+        },
+        required: ['employeeId']
       }
     },
     {
@@ -306,6 +331,12 @@ export function executeToolOperation(toolName: GeminiToolName, args: Record<stri
         recordsRetrieved: 142,
         quarter: args.ledgerQuarter || '2026-Q3',
         classification: 'RESTRICTED_EXECUTIVE_LEDGER'
+      };
+    case 'READ_EMPLOYEE_DATA':
+      return {
+        status: 'SUCCESS_CONFIDENTIAL',
+        recordsRetrieved: 84,
+        classification: 'RESTRICTED_EMPLOYEE_PII'
       };
     case 'ACCESS_ADMIN_CONFIG':
       return {
