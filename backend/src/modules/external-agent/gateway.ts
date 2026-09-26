@@ -190,6 +190,8 @@ export class ExternalAgentGateway {
 
     // 2. Model generates next action proposal (Gemini with graceful fallback to deterministic provider)
     let proposedAction: ProposedAction;
+    let providerMode: 'live-gemini' | 'deterministic-fallback' | 'simulated' =
+      record.provider.id === 'gemini-provider' ? 'live-gemini' : 'simulated';
     try {
       proposedAction = await record.provider.generateNextAction(context);
     } catch (err: unknown) {
@@ -197,6 +199,7 @@ export class ExternalAgentGateway {
         `[Gateway] Provider '${record.provider.name}' failed to generate action: ${(err as Error).message}. Gracefully falling back to deterministic simulator.`
       );
       proposedAction = await this.mockProvider.generateNextAction(context);
+      providerMode = 'deterministic-fallback';
     }
 
     // 3. Send proposed action through Sentinel gate or Tool Gateway
@@ -207,7 +210,13 @@ export class ExternalAgentGateway {
     let interventionWindow: string;
     let interventionUrgency: string;
     let predictedNextRisk: number;
+    let riskVelocity: string = 'LOW';
     let riskAcceleration: string = String(record.session.riskAcceleration ?? 'STABLE');
+    let forecast: import('@sentinel/shared').RiskForecast | undefined;
+    let interventionExplanation: string = '';
+    let interventionReasons: string[] = [];
+    let eventId: string | undefined;
+    let authorization: import('@sentinel/shared').ActionAuthorization = 'AUTHORIZED';
     let humanReviewRequired = false;
     let pendingInterventionId: string | undefined;
     let executed = false;
@@ -234,13 +243,28 @@ export class ExternalAgentGateway {
       preventionProof = toolExec.preventionProof;
       pendingInterventionId = toolExec.pendingInterventionId;
       spamSignals = toolExec.spamSignals;
+      eventId = toolExec.eventId;
+      authorization = toolExec.authorization || 'AUTHORIZED';
+      forecast = toolExec.forecast;
+      interventionExplanation = toolExec.interventionExplanation || '';
+      interventionReasons = toolExec.interventionReasons || [];
 
       const updatedSession = await sessionService.getSession(record.session.id);
-      trajectoryDeviation = updatedSession?.trajectoryDeviation ?? 0;
-      interventionWindow = String(updatedSession?.metadata?.interventionWindow ?? 'SAFE');
-      interventionUrgency = String(updatedSession?.metadata?.interventionUrgency ?? 'NONE');
+      trajectoryDeviation = updatedSession?.trajectoryDeviation ?? toolExec.trajectoryDeviation ?? 0;
+      interventionWindow = String(updatedSession?.metadata?.interventionWindow ?? toolExec.interventionWindow ?? 'SAFE');
+      interventionUrgency = String(updatedSession?.metadata?.interventionUrgency ?? toolExec.interventionUrgency ?? 'NONE');
       predictedNextRisk = Number(updatedSession?.metadata?.predictedRisk ?? risk);
       riskAcceleration = String(updatedSession?.riskAcceleration ?? 'STABLE');
+      riskVelocity = String(updatedSession?.riskVelocity ?? 'LOW');
+      if (!forecast && updatedSession?.metadata?.forecast) {
+        forecast = updatedSession.metadata.forecast as import('@sentinel/shared').RiskForecast;
+      }
+      if (!interventionExplanation && updatedSession?.metadata?.interventionExplanation) {
+        interventionExplanation = String(updatedSession.metadata.interventionExplanation);
+      }
+      if (interventionReasons.length === 0 && updatedSession?.metadata?.interventionReasons) {
+        interventionReasons = updatedSession.metadata.interventionReasons as string[];
+      }
 
       if (decisionAction === 'CONFIRM') {
         record.paused = true;
@@ -273,14 +297,20 @@ export class ExternalAgentGateway {
       });
 
       const { event, decision } = ingestResult;
+      eventId = event.eventId;
+      authorization = event.authorization;
       decisionAction = decision.action;
       decisionReasons = decision.reason;
       risk = Number(event.metadata?.risk ?? 0);
       trajectoryDeviation = Number(event.metadata?.trajectoryDeviation ?? 0);
       interventionWindow = String(event.metadata?.interventionWindow ?? 'SAFE');
       interventionUrgency = String(event.metadata?.interventionUrgency ?? 'NONE');
+      interventionExplanation = String(event.metadata?.interventionExplanation ?? '');
+      interventionReasons = (event.metadata?.interventionReasons as string[]) || [];
       predictedNextRisk = Number(event.metadata?.predictedRisk ?? risk);
+      forecast = event.metadata?.forecast as import('@sentinel/shared').RiskForecast | undefined;
       riskAcceleration = String(record.session.riskAcceleration ?? 'STABLE');
+      riskVelocity = String(record.session.riskVelocity ?? 'LOW');
       spamSignals = event.metadata?.spamSignals as any;
 
       if (decision.action === 'CONFIRM') {
@@ -310,22 +340,50 @@ export class ExternalAgentGateway {
     const previousRisk = record.stepResults.length > 0
       ? record.stepResults[record.stepResults.length - 1].risk
       : 0;
+    const previousRiskDelta = record.stepResults.length > 0
+      ? record.stepResults[record.stepResults.length - 1].riskDelta ?? 0
+      : 0;
     const riskDelta = risk - previousRisk;
+    const rollingRiskChange = riskDelta - previousRiskDelta;
+
+    const outcome: 'EXECUTED' | 'HELD_FOR_REVIEW' | 'BLOCKED' | 'DENIED' =
+      executed
+        ? 'EXECUTED'
+        : decisionAction === 'CONFIRM'
+        ? 'HELD_FOR_REVIEW'
+        : 'BLOCKED';
 
     const stepResult: ControlledStepResult = {
       stepNumber: record.stepIndex + 1,
       timestamp: new Date().toISOString(),
+      eventId,
+      agentId: record.agent.id,
+      sessionId: record.session.id,
+      action: proposedAction.action,
+      resource: proposedAction.resource,
+      resourceType: proposedAction.resourceType,
+      scope: proposedAction.scope,
+      sensitivity: proposedAction.sensitivity,
+      reversibility: proposedAction.reversibility,
+      authorization,
+      outcome,
       proposedAction,
       decision: decisionAction,
       decisionReasons: decisionReasons,
       risk,
       previousRisk,
       riskDelta,
+      rollingRiskChange,
       trajectoryDeviation,
+      riskVelocity,
       riskAcceleration,
       predictedNextRisk,
+      forecast,
       interventionWindow,
       interventionUrgency,
+      interventionExplanation,
+      interventionReasons,
+      providerMode,
       humanReviewRequired,
       pendingInterventionId,
       simpleNarration,
@@ -394,6 +452,7 @@ export class ExternalAgentGateway {
     const lastStep = record.stepResults[record.stepResults.length - 1];
     if (lastStep) {
       lastStep.humanDecision = decision;
+      lastStep.outcome = decision === 'ALLOW_ONCE' ? 'EXECUTED' : 'DENIED';
     }
 
     if (decision === 'ALLOW_ONCE') {

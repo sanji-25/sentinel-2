@@ -75,6 +75,20 @@ export interface ToolExecutionResult {
   preventionProof?: string;
   timestamp: string;
   spamSignals?: import('@sentinel/shared').SpamSignals;
+  eventId?: string;
+  authorization?: import('@sentinel/shared').ActionAuthorization;
+  resource?: string;
+  resourceType?: string;
+  scope?: string;
+  sensitivity?: ActionSensitivity;
+  reversibility?: ActionReversibility;
+  trajectoryDeviation?: number;
+  interventionWindow?: string;
+  interventionUrgency?: string;
+  interventionExplanation?: string;
+  interventionReasons?: string[];
+  forecast?: import('@sentinel/shared').RiskForecast;
+  counterfactual?: import('@sentinel/shared').CounterfactualAnalysis;
 }
 
 export interface PendingToolExecution {
@@ -294,6 +308,11 @@ export class ToolGateway {
     const riskScore = Number(event.metadata?.risk ?? 0);
     const trajectoryDeviation = Number(event.metadata?.trajectoryDeviation ?? 0);
     const interventionWindow = String(event.metadata?.interventionWindow ?? 'SAFE');
+    const interventionUrgency = String(event.metadata?.interventionUrgency ?? 'NONE');
+    const interventionExplanation = String(event.metadata?.interventionExplanation ?? '');
+    const interventionReasons = (event.metadata?.interventionReasons as string[]) || [];
+    const forecast = event.metadata?.forecast as import('@sentinel/shared').RiskForecast | undefined;
+    const counterfactual = event.metadata?.counterfactual as import('@sentinel/shared').CounterfactualAnalysis | undefined;
     const spamSignals = event.metadata?.spamSignals as import('@sentinel/shared').SpamSignals | undefined;
     const timestamp = new Date().toISOString();
 
@@ -312,7 +331,21 @@ export class ToolGateway {
         toolResult: null,
         preventionProof: 'Sentinel prevented this action.',
         timestamp,
-        spamSignals
+        spamSignals,
+        eventId: event.eventId,
+        authorization: event.authorization,
+        resource: actionMapping.resource,
+        resourceType: actionMapping.resourceType,
+        scope: actionMapping.scope,
+        sensitivity: actionMapping.sensitivity,
+        reversibility: actionMapping.reversibility,
+        trajectoryDeviation,
+        interventionWindow,
+        interventionUrgency,
+        interventionExplanation,
+        interventionReasons,
+        forecast,
+        counterfactual
       };
 
       // Record audit proof of prevention
@@ -368,7 +401,21 @@ export class ToolGateway {
         toolResult: null,
         pendingInterventionId,
         timestamp,
-        spamSignals
+        spamSignals,
+        eventId: event.eventId,
+        authorization: event.authorization,
+        resource: actionMapping.resource,
+        resourceType: actionMapping.resourceType,
+        scope: actionMapping.scope,
+        sensitivity: actionMapping.sensitivity,
+        reversibility: actionMapping.reversibility,
+        trajectoryDeviation,
+        interventionWindow,
+        interventionUrgency,
+        interventionExplanation,
+        interventionReasons,
+        forecast,
+        counterfactual
       };
 
       await this.audit.logEvent({
@@ -417,7 +464,21 @@ export class ToolGateway {
       toolExecutionState: 'SUCCESS',
       toolResult,
       timestamp,
-      spamSignals
+      spamSignals,
+      eventId: event.eventId,
+      authorization: event.authorization,
+      resource: actionMapping.resource,
+      resourceType: actionMapping.resourceType,
+      scope: actionMapping.scope,
+      sensitivity: actionMapping.sensitivity,
+      reversibility: actionMapping.reversibility,
+      trajectoryDeviation,
+      interventionWindow,
+      interventionUrgency,
+      interventionExplanation,
+      interventionReasons,
+      forecast,
+      counterfactual
     };
 
     // Audit tool execution with telemetry

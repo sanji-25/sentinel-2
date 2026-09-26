@@ -33,17 +33,41 @@ interface ProposedAction {
 interface ControlledStepResult {
   stepNumber: number;
   timestamp: string;
+  eventId?: string;
+  agentId?: string;
+  sessionId?: string;
+  action?: string;
+  resource?: string;
+  resourceType?: string;
+  scope?: string;
+  sensitivity?: string;
+  reversibility?: string;
+  authorization?: string;
+  outcome?: 'EXECUTED' | 'HELD_FOR_REVIEW' | 'BLOCKED' | 'DENIED';
   proposedAction: ProposedAction;
   decision: 'ALLOW' | 'MONITOR' | 'WARN' | 'CONFIRM' | 'BLOCK';
   decisionReasons: string[];
   risk: number;
   previousRisk?: number;
   riskDelta?: number;
+  rollingRiskChange?: number;
   trajectoryDeviation: number;
+  riskVelocity?: string;
   riskAcceleration: string;
   predictedNextRisk: number;
+  forecast?: {
+    nextActionRisk: number;
+    actionPlus2Risk: number;
+    actionPlus3Risk: number;
+    horizonLabel: string;
+    trajectorySlope: number;
+    confidence: number;
+  };
   interventionWindow: string;
   interventionUrgency: string;
+  interventionExplanation?: string;
+  interventionReasons?: string[];
+  providerMode?: 'live-gemini' | 'deterministic-fallback' | 'simulated';
   humanReviewRequired: boolean;
   humanDecision?: 'ALLOW_ONCE' | 'DENY' | 'REVOKE_SESSION';
   pendingInterventionId?: string;
@@ -106,7 +130,25 @@ export const LiveAgentView: React.FC = () => {
   const [streamProgressText, setStreamProgressText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
+  const [isReplaying, setIsReplaying] = useState<boolean>(false);
   const streamEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-play chronological session replay
+  const handleReplaySession = () => {
+    if (steps.length < 2 || isRunning) return;
+    setIsReplaying(true);
+    let idx = 0;
+    setSelectedStepIndex(0);
+    const interval = setInterval(() => {
+      idx++;
+      if (idx < steps.length) {
+        setSelectedStepIndex(idx);
+      } else {
+        clearInterval(interval);
+        setIsReplaying(false);
+      }
+    }, 1200);
+  };
 
   // Fetch customer store state
   const fetchCustomerStore = async () => {
@@ -299,7 +341,9 @@ export const LiveAgentView: React.FC = () => {
   const plotWidth = chartWidth - padLeft - padRight;
   const plotHeight = chartHeight - padTop - padBottom;
 
-  const getX = (index: number, total: number) => {
+  const totalSlots = Math.max(steps.length + (currentStep?.forecast ? 3 : 0), 5);
+
+  const getX = (index: number, total: number = totalSlots) => {
     const divisor = Math.max(total - 1, 4);
     return padLeft + (index / divisor) * plotWidth;
   };
@@ -355,6 +399,19 @@ export const LiveAgentView: React.FC = () => {
               <div>Agent: <span className="text-slate-900 dark:text-slate-100 font-semibold">{selectedScenario === 'GEMINI_CUSTOMER_SUPPORT' ? 'Gemini Support Agent' : 'Gemini Research Agent'} {agentId ? `(${agentId})` : ''}</span></div>
               <div>Provider: <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{providerStatus?.providerName || 'Google Gemini'}</span></div>
               <div>Model: <span className="text-slate-900 dark:text-slate-100 font-mono font-semibold">{providerStatus?.modelName || 'gemini-3.8-flash'}</span></div>
+              <div>Mode: <span className={`font-semibold ${
+                currentStep?.providerMode === 'live-gemini'
+                  ? 'text-purple-600 dark:text-purple-400'
+                  : currentStep?.providerMode === 'deterministic-fallback'
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-slate-700 dark:text-slate-300'
+              }`}>
+                {currentStep?.providerMode === 'live-gemini'
+                  ? 'Live Gemini Inference'
+                  : currentStep?.providerMode === 'deterministic-fallback'
+                  ? 'Deterministic Fallback (Quota/429)'
+                  : 'Deterministic Simulation'}
+              </span></div>
               <div>Task: <span className="text-slate-900 dark:text-slate-100 italic">{selectedScenario === 'GEMINI_CUSTOMER_SUPPORT' ? 'Customer service & order triage' : 'Research project information'}</span></div>
             </div>
           </div>
@@ -399,13 +456,23 @@ export const LiveAgentView: React.FC = () => {
         </div>
 
         {/* Provider Graceful Fallback Banner */}
-        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+        <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-slate-400" />
             <span className="text-slate-600 dark:text-slate-400 font-medium">
-              {providerStatus?.isConfigured
-                ? 'Gemini Connected — Real model inference active.'
-                : 'Gemini is not configured — running deterministic demo agent.'}
+              {currentStep?.providerMode === 'live-gemini' ? (
+                <span className="text-purple-600 dark:text-purple-400 font-semibold">
+                  LIVE GEMINI RESPONSE — Real Google Gemini API generation active.
+                </span>
+              ) : currentStep?.providerMode === 'deterministic-fallback' ? (
+                <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                  DETERMINISTIC FALLBACK ACTIVE — Failover engaged due to upstream Google Gemini API free-tier quota (429).
+                </span>
+              ) : providerStatus?.isConfigured ? (
+                'Gemini Connected — Standby for session stream.'
+              ) : (
+                'Gemini is not configured — running deterministic demo agent.'
+              )}
             </span>
           </div>
           <span className="text-[11px] font-mono text-slate-400">
@@ -826,7 +893,7 @@ export const LiveAgentView: React.FC = () => {
             {/* Step Trajectory Points & Path */}
             {steps.length > 0 && (
               <>
-                {/* Connecting Polyline */}
+                {/* Connecting Polyline for Observed Historical Actions */}
                 {steps.length > 1 && (
                   <polyline
                     fill="none"
@@ -834,26 +901,69 @@ export const LiveAgentView: React.FC = () => {
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    points={steps.map((s, i) => `${getX(i, steps.length)},${getY(s.risk)}`).join(' ')}
+                    points={steps.map((s, i) => `${getX(i, totalSlots)},${getY(s.risk)}`).join(' ')}
                   />
                 )}
 
-                {/* Forecast Line to predictedNextRisk */}
-                {currentStep && (
+                {/* 3-Step Multi-Horizon Forecast Projection Line & Hollow Nodes */}
+                {currentStep?.forecast ? (
+                  <>
+                    <polyline
+                      fill="none"
+                      stroke="rgb(168 85 247)"
+                      strokeWidth="2"
+                      strokeDasharray="4 4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      points={`${getX(steps.length - 1, totalSlots)},${getY(currentStep.risk)} ${getX(steps.length, totalSlots)},${getY(currentStep.forecast.nextActionRisk)} ${getX(steps.length + 1, totalSlots)},${getY(currentStep.forecast.actionPlus2Risk)} ${getX(steps.length + 2, totalSlots)},${getY(currentStep.forecast.actionPlus3Risk)}`}
+                    />
+                    {/* Forecast Step +1 */}
+                    <g>
+                      <circle cx={getX(steps.length, totalSlots)} cy={getY(currentStep.forecast.nextActionRisk)} r="5" fill="none" stroke="rgb(168 85 247)" strokeWidth="2" strokeDasharray="3 3" />
+                      <text x={getX(steps.length, totalSlots)} y={getY(currentStep.forecast.nextActionRisk) - 8} textAnchor="middle" className="text-[9px] fill-purple-600 dark:fill-purple-400 font-mono font-bold">
+                        {currentStep.forecast.nextActionRisk}
+                      </text>
+                      <text x={getX(steps.length, totalSlots)} y={chartHeight - 6} textAnchor="middle" className="text-[9px] fill-purple-400 font-mono">
+                        +1 pred
+                      </text>
+                    </g>
+                    {/* Forecast Step +2 */}
+                    <g>
+                      <circle cx={getX(steps.length + 1, totalSlots)} cy={getY(currentStep.forecast.actionPlus2Risk)} r="5" fill="none" stroke="rgb(168 85 247)" strokeWidth="2" strokeDasharray="3 3" />
+                      <text x={getX(steps.length + 1, totalSlots)} y={getY(currentStep.forecast.actionPlus2Risk) - 8} textAnchor="middle" className="text-[9px] fill-purple-600 dark:fill-purple-400 font-mono font-bold">
+                        {currentStep.forecast.actionPlus2Risk}
+                      </text>
+                      <text x={getX(steps.length + 1, totalSlots)} y={chartHeight - 6} textAnchor="middle" className="text-[9px] fill-purple-400 font-mono">
+                        +2 pred
+                      </text>
+                    </g>
+                    {/* Forecast Step +3 */}
+                    <g>
+                      <circle cx={getX(steps.length + 2, totalSlots)} cy={getY(currentStep.forecast.actionPlus3Risk)} r="5" fill="none" stroke="rgb(168 85 247)" strokeWidth="2" strokeDasharray="3 3" />
+                      <text x={getX(steps.length + 2, totalSlots)} y={getY(currentStep.forecast.actionPlus3Risk) - 8} textAnchor="middle" className="text-[9px] fill-purple-600 dark:fill-purple-400 font-mono font-bold">
+                        {currentStep.forecast.actionPlus3Risk}
+                      </text>
+                      <text x={getX(steps.length + 2, totalSlots)} y={chartHeight - 6} textAnchor="middle" className="text-[9px] fill-purple-400 font-mono">
+                        +3 pred
+                      </text>
+                    </g>
+                  </>
+                ) : currentStep ? (
+                  /* Single Forecast Fallback */
                   <line
-                    x1={getX(steps.length - 1, steps.length)}
+                    x1={getX(steps.length - 1, totalSlots)}
                     y1={getY(currentStep.risk)}
-                    x2={Math.min(chartWidth - padRight, getX(steps.length - 1, steps.length) + 45)}
+                    x2={Math.min(chartWidth - padRight, getX(steps.length - 1, totalSlots) + 45)}
                     y2={getY(currentStep.predictedNextRisk)}
                     stroke="rgb(168 85 247)"
                     strokeWidth="2"
                     strokeDasharray="4 4"
                   />
-                )}
+                ) : null}
 
                 {/* Render Each Step Node */}
                 {steps.map((s, i) => {
-                  const cx = getX(i, steps.length);
+                  const cx = getX(i, totalSlots);
                   const cy = getY(s.risk);
                   const isBlock = s.decision === 'BLOCK';
                   const isConfirm = s.decision === 'CONFIRM';
@@ -911,7 +1021,227 @@ export const LiveAgentView: React.FC = () => {
             )}
           </svg>
         </div>
+
+        {/* Forecast Horizon Legend & Distinguishing Note */}
+        {currentStep?.forecast && (
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+            <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-semibold">
+              <Zap className="w-3.5 h-3.5 text-purple-500" />
+              <span>Forecast Horizon (Next 1–3 Actions): {currentStep.forecast.horizonLabel}</span>
+            </div>
+            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400 text-[10px]">
+              <span>Confidence: <strong className="text-purple-600 dark:text-purple-400">{currentStep.forecast.confidence}%</strong></span>
+              <span>Slope: <strong className="text-purple-600 dark:text-purple-400">{currentStep.forecast.trajectorySlope > 0 ? '+' : ''}{currentStep.forecast.trajectorySlope}/step</strong></span>
+              <span className="italic text-slate-400">(Hollow nodes indicate projected estimates, visually distinct from observed history)</span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Chronological Session Replay Scrubber */}
+      {steps.length > 0 && (
+        <div className="card-tactile p-3.5 border-slate-200 dark:border-slate-800 bg-surface-50/70 dark:bg-surface-900/70 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-indigo-500" />
+            <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[11px]">
+              Session Replay Controller
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+              Viewing Step {selectedStepIndex + 1} of {steps.length}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setSelectedStepIndex(0)}
+              disabled={selectedStepIndex === 0 || isRunning}
+              className="px-2.5 py-1 rounded-lg bg-surface-primary dark:bg-surface-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 cursor-pointer"
+              title="First Step"
+            >
+              ⏮ First
+            </button>
+            <button
+              onClick={() => setSelectedStepIndex((prev) => Math.max(0, prev - 1))}
+              disabled={selectedStepIndex === 0 || isRunning}
+              className="px-2.5 py-1 rounded-lg bg-surface-primary dark:bg-surface-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 cursor-pointer"
+              title="Previous Step"
+            >
+              ◀ Prev
+            </button>
+            <button
+              onClick={handleReplaySession}
+              disabled={isRunning || isReplaying || steps.length < 2}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] disabled:opacity-40 shadow-sm cursor-pointer"
+              title="Auto-play chronological session"
+            >
+              {isReplaying ? (
+                <>
+                  <RotateCcw className="w-3 h-3 animate-spin" />
+                  <span>Replaying...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Replay Session</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setSelectedStepIndex((prev) => Math.min(steps.length - 1, prev + 1))}
+              disabled={selectedStepIndex === steps.length - 1 || isRunning}
+              className="px-2.5 py-1 rounded-lg bg-surface-primary dark:bg-surface-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 cursor-pointer"
+              title="Next Step"
+            >
+              Next ▶
+            </button>
+            <button
+              onClick={() => setSelectedStepIndex(steps.length - 1)}
+              disabled={selectedStepIndex === steps.length - 1 || isRunning}
+              className="px-2.5 py-1 rounded-lg bg-surface-primary dark:bg-surface-800 border border-slate-200 dark:border-slate-700 font-mono text-[11px] hover:bg-surface-100 dark:hover:bg-surface-700 disabled:opacity-40 cursor-pointer"
+              title="Latest Step"
+            >
+              Latest ⏭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Intervention Timing & Reasoning Card */}
+      {currentStep && (
+        <div className="card-tactile p-4 border-slate-200 dark:border-slate-800 bg-surface-primary dark:bg-surface-primary space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                Intervention Intelligence & Timing Reasoning
+              </h3>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border self-start sm:self-auto ${
+              currentStep.interventionWindow === 'OPTIMAL_WINDOW'
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                : currentStep.interventionWindow === 'TOO_LATE'
+                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+            }`}>
+              {currentStep.interventionWindow} ({currentStep.interventionUrgency})
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+            <div className="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Current Risk</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">{currentStep.risk}/100</span>
+            </div>
+            <div className="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Risk Trend</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">{currentStep.riskVelocity || (currentStep.risk > 60 ? 'HIGH' : currentStep.risk > 30 ? 'MEDIUM' : 'LOW')}</span>
+            </div>
+            <div className="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Risk Acceleration</span>
+              <span className="font-bold text-slate-800 dark:text-slate-200">
+                {currentStep.riskAcceleration} (Δ {((currentStep.rollingRiskChange ?? 0) >= 0 ? '+' : '') + (currentStep.rollingRiskChange ?? 0)})
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Forecast (+1 / +2 / +3)</span>
+              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                {currentStep.forecast?.nextActionRisk ?? currentStep.predictedNextRisk} / {currentStep.forecast?.actionPlus2Risk ?? '—'} / {currentStep.forecast?.actionPlus3Risk ?? '—'}
+              </span>
+            </div>
+          </div>
+
+          {currentStep.interventionExplanation && (
+            <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium bg-amber-50/50 dark:bg-amber-950/20 p-2.5 rounded-lg border border-amber-200/60 dark:border-amber-800/40">
+              <strong>Sentinel Window Verdict:</strong> {currentStep.interventionExplanation}
+            </div>
+          )}
+
+          {currentStep.interventionReasons && currentStep.interventionReasons.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                Key Trajectory Factors:
+              </span>
+              <ul className="space-y-1 text-xs text-slate-600 dark:text-slate-400 list-disc list-inside">
+                {currentStep.interventionReasons.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Session Governance & Evaluation Metrics Panel */}
+      {steps.length > 0 && (
+        <div className="card-tactile p-4 border-slate-200 dark:border-slate-800 bg-surface-50/40 dark:bg-surface-900/40 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-2">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-500" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Session Evaluation & Governance Metrics
+              </h3>
+            </div>
+            <span className="text-[11px] font-mono text-slate-400">
+              {steps.length} Actions Evaluated
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 text-xs font-mono">
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Policy Decisions</span>
+              <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                <span className="text-emerald-500 font-bold">A:{steps.filter((s) => s.decision === 'ALLOW').length}</span>
+                <span className="text-sky-500 font-bold">M:{steps.filter((s) => s.decision === 'MONITOR').length}</span>
+                <span className="text-amber-500 font-bold">W:{steps.filter((s) => s.decision === 'WARN').length}</span>
+                <span className="text-orange-500 font-bold">C:{steps.filter((s) => s.decision === 'CONFIRM').length}</span>
+                <span className="text-rose-500 font-bold">B:{steps.filter((s) => s.decision === 'BLOCK').length}</span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Avg Risk</span>
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                {Math.round(steps.reduce((sum, s) => sum + s.risk, 0) / steps.length)}/100
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Peak Risk</span>
+              <span className="text-sm font-bold text-rose-500">
+                {Math.max(...steps.map((s) => s.risk))}/100
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Max Deviation</span>
+              <span className="text-sm font-bold text-indigo-500">
+                {Math.max(...steps.map((s) => s.trajectoryDeviation))}%
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Human Approval</span>
+              <span className="text-sm font-bold text-emerald-500">
+                {steps.filter((s) => s.humanDecision === 'ALLOW_ONCE').length} Approved
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">Human Denials</span>
+              <span className="text-sm font-bold text-rose-500">
+                {steps.filter((s) => s.humanDecision === 'DENY' || s.humanDecision === 'REVOKE_SESSION').length} Denied
+              </span>
+            </div>
+
+            <div className="p-2 rounded-lg bg-surface-100 dark:bg-surface-800/60 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="text-[10px] text-slate-400 block font-sans">False-Pos Check</span>
+              <span className={`text-[11px] font-bold ${selectedScenario === 'GEMINI_FALSE_POSITIVE' ? 'text-emerald-500' : 'text-slate-400'}`}>
+                {selectedScenario === 'GEMINI_FALSE_POSITIVE' ? 'VERIFIED (0 BLOCKS)' : 'ACTIVE'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Live Simulated Customer & Order Data Store Panel */}
       <div className="card-tactile p-4 border-slate-200 dark:border-slate-800 bg-surface-50/50 dark:bg-surface-900/50 space-y-3">
@@ -1043,6 +1373,17 @@ export const LiveAgentView: React.FC = () => {
                         <span>{timeStr}</span>
                       </div>
                       <div className="flex items-center gap-2">
+                        {step.providerMode && (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
+                            step.providerMode === 'live-gemini'
+                              ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30'
+                              : step.providerMode === 'deterministic-fallback'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30'
+                          }`}>
+                            {step.providerMode === 'live-gemini' ? 'LIVE GEMINI' : step.providerMode === 'deterministic-fallback' ? 'FALLBACK' : 'SIMULATOR'}
+                          </span>
+                        )}
                         <span className={`px-2.5 py-0.5 rounded text-xs font-bold border ${getDecisionBadge(step.decision)}`}>
                           Sentinel → {step.decision}
                         </span>
@@ -1156,6 +1497,30 @@ export const LiveAgentView: React.FC = () => {
 
                   <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5 font-mono text-[11px]">
                     <div className="flex justify-between">
+                      <span className="text-slate-500">Event ID:</span>
+                      <span className="text-slate-800 dark:text-slate-200 truncate max-w-[170px]">{currentStep.eventId || `evt_step_${currentStep.stepNumber}`}</span>
+                    </div>
+                    {currentStep.providerMode && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Provider Engine:</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                          currentStep.providerMode === 'live-gemini'
+                            ? 'text-purple-600 dark:text-purple-400'
+                            : currentStep.providerMode === 'deterministic-fallback'
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-slate-500'
+                        }`}>
+                          {currentStep.providerMode === 'live-gemini' ? 'LIVE GEMINI' : currentStep.providerMode === 'deterministic-fallback' ? 'DETERMINISTIC FALLBACK' : 'SIMULATOR'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Authorization:</span>
+                      <span className={`font-bold ${currentStep.authorization === 'AUTHORIZED' ? 'text-emerald-500' : currentStep.authorization === 'UNAUTHORIZED' ? 'text-rose-500' : 'text-slate-400'}`}>
+                        {currentStep.authorization || 'UNKNOWN'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-slate-500">Resource:</span>
                       <span className="text-slate-800 dark:text-slate-200 truncate max-w-[170px]">{currentStep.proposedAction.resource}</span>
                     </div>
@@ -1173,7 +1538,7 @@ export const LiveAgentView: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Risk Velocity / Delta:</span>
-                      <span className="text-slate-800 dark:text-slate-200">{currentStep.riskAcceleration} (Δ: {currentStep.riskDelta ?? 0})</span>
+                      <span className="text-slate-800 dark:text-slate-200">{currentStep.riskAcceleration} (Δ: {currentStep.riskDelta ?? 0}{currentStep.rollingRiskChange !== undefined ? `, ΔΔ: ${currentStep.rollingRiskChange}` : ''})</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Intervention Window:</span>
