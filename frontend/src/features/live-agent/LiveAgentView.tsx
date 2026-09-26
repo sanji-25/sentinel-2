@@ -103,6 +103,7 @@ export const LiveAgentView: React.FC = () => {
   const [steps, setSteps] = useState<ControlledStepResult[]>([]);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
+  const [streamProgressText, setStreamProgressText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmittingDecision, setIsSubmittingDecision] = useState<boolean>(false);
   const streamEndRef = useRef<HTMLDivElement>(null);
@@ -143,15 +144,16 @@ export const LiveAgentView: React.FC = () => {
     setError(null);
     setSteps([]);
     setSessionStatus('LIVE');
+    setStreamProgressText('Starting governed agent session...');
 
     try {
       // 1. Start session
-      const startData = await apiClient.post<any>('/v1/live-agent/start', {
+      const startData: any = await apiClient.post<any>('/v1/live-agent/start', {
         scenarioId: selectedScenario
       });
 
-      const newSessionId = startData.session?.id || startData.id;
-      const newAgentId = startData.agent?.id;
+      const newSessionId = startData.session?.id || startData.data?.session?.id || startData.id;
+      const newAgentId = startData.agent?.id || startData.data?.agent?.id;
       setSessionId(newSessionId);
       setAgentId(newAgentId);
 
@@ -162,10 +164,15 @@ export const LiveAgentView: React.FC = () => {
 
       while (stepNum < maxSteps && currentStatus === 'LIVE') {
         stepNum++;
-        const stepData: ControlledStepResult = await apiClient.post<ControlledStepResult>(
+        setStreamProgressText(`Agent proposing action (Step ${stepNum})...`);
+
+        const rawStep: any = await apiClient.post<any>(
           '/v1/live-agent/step',
           { sessionId: newSessionId }
         );
+        const stepData: ControlledStepResult = rawStep.data || rawStep;
+
+        setStreamProgressText(`Evaluating trajectory & risk (Step ${stepNum}: ${stepData.proposedAction?.action || 'ACTION'})...`);
         setSteps((prev) => [...prev, stepData]);
         setSelectedStepIndex(stepNum - 1);
         await fetchCustomerStore();
@@ -173,12 +180,14 @@ export const LiveAgentView: React.FC = () => {
         if (stepData.decision === 'CONFIRM') {
           currentStatus = 'PAUSED';
           setSessionStatus('PAUSED');
+          setStreamProgressText('Intervention Window Triggered // Awaiting Human Confirmation');
           break; // Stop automated loop to await human interaction
         }
 
         if (stepData.decision === 'BLOCK') {
           currentStatus = 'BLOCKED';
           setSessionStatus('BLOCKED');
+          setStreamProgressText('Execution Halted // Sentinel Policy BLOCK Enforcement');
           break;
         }
 
@@ -187,10 +196,12 @@ export const LiveAgentView: React.FC = () => {
 
       if (currentStatus === 'LIVE') {
         setSessionStatus('COMPLETED');
+        setStreamProgressText('Session completed. All actions governed.');
       }
     } catch (err) {
       setError((err as Error).message);
       setSessionStatus('IDLE');
+      setStreamProgressText('');
     } finally {
       setIsRunning(false);
     }
@@ -234,10 +245,11 @@ export const LiveAgentView: React.FC = () => {
         setIsRunning(true);
         setTimeout(async () => {
           try {
-            const nextStepData: ControlledStepResult = await apiClient.post<ControlledStepResult>(
+            const rawNext: any = await apiClient.post<any>(
               '/v1/live-agent/step',
               { sessionId }
             );
+            const nextStepData: ControlledStepResult = rawNext.data || rawNext;
             setSteps((prev) => [...prev, nextStepData]);
             setSelectedStepIndex(steps.length);
             await fetchCustomerStore();
@@ -374,7 +386,7 @@ export const LiveAgentView: React.FC = () => {
               {isRunning ? (
                 <>
                   <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Governing...</span>
+                  <span>{streamProgressText || 'Governing...'}</span>
                 </>
               ) : (
                 <>
@@ -892,7 +904,9 @@ export const LiveAgentView: React.FC = () => {
             {/* Zero State Prompt */}
             {steps.length === 0 && (
               <text x={chartWidth / 2} y={chartHeight / 2} textAnchor="middle" className="text-xs fill-slate-400 font-medium">
-                Click "Run Agent Session" to plot live behavioral risk trajectory
+                {isRunning
+                  ? (streamProgressText || 'Plotting live behavioral risk trajectory...')
+                  : 'Click "Run Agent Session" to plot live behavioral risk trajectory'}
               </text>
             )}
           </svg>
@@ -983,9 +997,31 @@ export const LiveAgentView: React.FC = () => {
 
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
             {steps.length === 0 ? (
-              <div className="card-tactile p-8 text-center text-slate-400 text-xs border-dashed">
-                Session idle. Click "Run Agent Session" to initiate governed agent stream.
-              </div>
+              isRunning ? (
+                <div className="card-tactile p-8 text-center text-indigo-500 text-xs flex flex-col items-center justify-center gap-2 border-dashed border-indigo-300 dark:border-indigo-700 bg-indigo-50/10">
+                  <RotateCcw className="w-5 h-5 animate-spin" />
+                  <span className="font-semibold">{streamProgressText || 'Initializing governed agent stream...'}</span>
+                  <span className="text-[11px] text-slate-400">Enforcing runtime policy gate & trajectory monitoring</span>
+                </div>
+              ) : error ? (
+                <div className="card-tactile p-6 text-center text-rose-600 dark:text-rose-400 text-xs border-dashed border-rose-300 dark:border-rose-800 space-y-2">
+                  <div className="font-bold flex items-center justify-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>Session Interrupted</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">{error}</p>
+                  <button
+                    onClick={handleStartSession}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-500"
+                  >
+                    Retry Session
+                  </button>
+                </div>
+              ) : (
+                <div className="card-tactile p-8 text-center text-slate-400 text-xs border-dashed">
+                  Session idle. Click "Run Agent Session" to initiate governed agent stream.
+                </div>
+              )
             ) : (
               steps.map((step, idx) => {
                 const isSelected = selectedStepIndex === idx;

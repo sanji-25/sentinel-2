@@ -93,17 +93,41 @@ You MUST respond ONLY with a JSON object conforming strictly to this schema:
 
 Do not include any conversational filler. Return only valid JSON.`;
 
-    try {
-      const result = await model.generateContent(systemPrompt);
-      const rawText = result.response.text();
+    let lastError: Error | null = null;
+    const candidateModels = Array.from(new Set([this.modelName, 'gemini-flash-latest']));
 
-      // Validate model output with zero-trust validation
-      return validateProposedAction(rawText);
-    } catch (err: unknown) {
-      if (err instanceof ActionValidationError) {
-        throw err;
+    for (const targetModel of candidateModels) {
+      const model = this.client.getGenerativeModel({
+        model: targetModel,
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const result = await model.generateContent(systemPrompt);
+          const rawText = result.response.text();
+
+          // Validate model output with zero-trust validation
+          return validateProposedAction(rawText);
+        } catch (err: unknown) {
+          if (err instanceof ActionValidationError) {
+            throw err;
+          }
+          lastError = err as Error;
+          const msg = (err as Error).message || '';
+          if ((msg.includes('503') || msg.includes('429') || msg.includes('high demand')) && attempt < 1) {
+            console.warn(`[GeminiProvider] ${targetModel} attempt ${attempt + 1} high demand, retrying...`);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            continue;
+          }
+          break; // proceed to next candidate model
+        }
       }
-      throw new Error(`Gemini model generation failed: ${(err as Error).message}`);
     }
+
+    throw new Error(`Gemini model generation failed: ${lastError?.message || 'Unknown error'}`);
   }
 }

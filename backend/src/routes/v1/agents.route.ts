@@ -17,17 +17,24 @@ router.post('/gemini/session', async (req: Request, res: Response, next: NextFun
       ? scopes
       : ['project.read', 'project.write', 'source.read'];
 
-    const agent = await agentService.registerAgent({
-      name: 'Gemini Research Agent',
-      type: 'external-ai-agent',
-      scopes: configuredScopes,
-      metadata: {
-        principal: principal || 'gemini-agent@external.sentinel',
-        task: task || 'Financial audit and repository inspection',
-        provider: 'gemini',
-        model: process.env.GEMINI_MODEL || 'gemini-3.8-flash'
-      }
-    });
+    const existingAgents = await agentService.listAgents();
+    let agent = existingAgents.find(
+      (a) => a.name === 'Gemini Research Agent' && a.status === 'ACTIVE'
+    );
+
+    if (!agent) {
+      agent = await agentService.registerAgent({
+        name: 'Gemini Research Agent',
+        type: 'external-ai-agent',
+        scopes: configuredScopes,
+        metadata: {
+          principal: principal || 'gemini-agent@external.sentinel',
+          task: task || 'Financial audit and repository inspection',
+          provider: 'gemini',
+          model: process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+        }
+      });
+    }
 
     const session = await sessionService.createSession({
       agentId: agent.id,

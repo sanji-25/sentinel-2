@@ -1,7 +1,8 @@
 import { app } from './app.js';
 import { config } from './config/index.js';
+import { bootstrapSystem } from './bootstrap.js';
 
-const server = app.listen(config.port, () => {
+const server = app.listen(config.port, async () => {
   console.log(`
 ============================================================
  SENTINEL 2.0 API RUNTIME ACTIVE
@@ -13,6 +14,12 @@ const server = app.listen(config.port, () => {
  [Ready]    : Runtime Control Layer Foundation Initialized
 ============================================================
   `);
+
+  try {
+    await bootstrapSystem();
+  } catch (err) {
+    console.error('[Bootstrap] Failed to initialize default agent/session:', (err as Error).message);
+  }
 });
 
 // Graceful shutdown handling

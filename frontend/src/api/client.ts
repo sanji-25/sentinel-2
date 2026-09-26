@@ -36,6 +36,10 @@ function normalizeApiBaseUrl(rawUrl?: string): string {
 
 const DEFAULT_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
+export interface ApiRequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -57,11 +61,11 @@ export class ApiClient {
     return `${this.baseUrl}${cleanEndpoint}`;
   }
 
-  public async get<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  public async get<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
-  public async post<T>(endpoint: string, body?: unknown, options: RequestInit = {}): Promise<T> {
+  public async post<T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
@@ -73,11 +77,12 @@ export class ApiClient {
     });
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     const url = this.getUrl(endpoint);
 
+    const timeoutDuration = options.timeoutMs ?? 60000; // 60s default timeout for AI inference & network
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s default timeout
+    const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
 
     try {
       const response = await fetch(url, {

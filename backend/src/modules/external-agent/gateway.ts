@@ -188,8 +188,16 @@ export class ExternalAgentGateway {
       actionHistory: record.history
     };
 
-    // 2. Model generates next action proposal
-    const proposedAction = await record.provider.generateNextAction(context);
+    // 2. Model generates next action proposal (Gemini with graceful fallback to deterministic provider)
+    let proposedAction: ProposedAction;
+    try {
+      proposedAction = await record.provider.generateNextAction(context);
+    } catch (err: unknown) {
+      console.warn(
+        `[Gateway] Provider '${record.provider.name}' failed to generate action: ${(err as Error).message}. Gracefully falling back to deterministic simulator.`
+      );
+      proposedAction = await this.mockProvider.generateNextAction(context);
+    }
 
     // 3. Send proposed action through Sentinel gate or Tool Gateway
     let decisionAction: PolicyDecisionAction;

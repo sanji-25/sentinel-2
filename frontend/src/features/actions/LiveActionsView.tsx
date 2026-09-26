@@ -50,10 +50,19 @@ export const LiveActionsView: React.FC = () => {
         sessionsApi.list()
       ]);
       setAgents(agentsData);
-      setSessions(sessionsData.filter((s) => s.status === 'ACTIVE'));
-      if (agentsData.length > 0 && !selectedAgentId) setSelectedAgentId(agentsData[0].id);
       const active = sessionsData.filter((s) => s.status === 'ACTIVE');
-      if (active.length > 0 && !selectedSessionId) setSelectedSessionId(active[0].id);
+      setSessions(active);
+
+      const targetAgentId = agentsData.some((a) => a.id === selectedAgentId)
+        ? selectedAgentId
+        : (agentsData[0]?.id || '');
+      setSelectedAgentId(targetAgentId);
+
+      const agentSessions = active.filter((s) => !targetAgentId || s.agentId === targetAgentId);
+      const targetSessionId = agentSessions.some((s) => s.id === selectedSessionId)
+        ? selectedSessionId
+        : (agentSessions[0]?.id || active[0]?.id || '');
+      setSelectedSessionId(targetSessionId);
     } catch {
       // Ignored for modal pre-fetching
     }
@@ -245,7 +254,14 @@ export const LiveActionsView: React.FC = () => {
                   </label>
                   <select
                     value={selectedAgentId}
-                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    onChange={(e) => {
+                      const newId = e.target.value;
+                      setSelectedAgentId(newId);
+                      const matchingSessions = sessions.filter((s) => s.agentId === newId);
+                      if (matchingSessions.length > 0) {
+                        setSelectedSessionId(matchingSessions[0].id);
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-800 text-slate-900 dark:text-slate-100 focus:outline-none"
                     required
                   >
