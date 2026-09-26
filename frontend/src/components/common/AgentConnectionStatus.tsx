@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Cpu, Shield } from 'lucide-react';
+import { apiClient } from '../../api/client';
 
 interface ConnectionStatusData {
   sentinelCore: string;
@@ -23,10 +24,9 @@ export const AgentConnectionStatus: React.FC<{ compact?: boolean; className?: st
     let isMounted = true;
     const fetchStatus = async () => {
       try {
-        const res = await fetch('/api/v1/system/agent-connection');
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted) setStatus(data);
+        const data = await apiClient.get<ConnectionStatusData>('/v1/system/agent-connection');
+        if (isMounted && data) {
+          setStatus(data);
         }
       } catch {
         // Fallback to default state

@@ -18,6 +18,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { SpamSignals } from '@sentinel/shared';
+import { apiClient } from '../../api/client';
 
 interface ProposedAction {
   action: string;
@@ -109,11 +110,8 @@ export const LiveAgentView: React.FC = () => {
   // Fetch customer store state
   const fetchCustomerStore = async () => {
     try {
-      const res = await fetch('/api/v1/tools/customer-store');
-      if (res.ok) {
-        const data = await res.json();
-        setCustomerStore(data.data || data);
-      }
+      const data = await apiClient.get<any>('/v1/tools/customer-store');
+      setCustomerStore(data.data || data);
     } catch {
       // Ignored
     }
@@ -122,11 +120,8 @@ export const LiveAgentView: React.FC = () => {
   // Fetch provider status
   const fetchStatus = async () => {
     try {
-      const res = await fetch('/api/v1/live-agent/status');
-      if (res.ok) {
-        const data = await res.json();
-        setProviderStatus(data.data || data);
-      }
+      const data = await apiClient.get<any>('/v1/live-agent/status');
+      setProviderStatus(data.data || data);
     } catch {
       // Ignored
     }
@@ -151,17 +146,10 @@ export const LiveAgentView: React.FC = () => {
 
     try {
       // 1. Start session
-      const startRes = await fetch('/api/v1/live-agent/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenarioId: selectedScenario })
+      const startData = await apiClient.post<any>('/v1/live-agent/start', {
+        scenarioId: selectedScenario
       });
 
-      if (!startRes.ok) {
-        throw new Error(`Failed to start session: HTTP ${startRes.status}`);
-      }
-
-      const startData = await startRes.json();
       const newSessionId = startData.session?.id || startData.id;
       const newAgentId = startData.agent?.id;
       setSessionId(newSessionId);
@@ -174,17 +162,10 @@ export const LiveAgentView: React.FC = () => {
 
       while (stepNum < maxSteps && currentStatus === 'LIVE') {
         stepNum++;
-        const stepRes = await fetch('/api/v1/live-agent/step', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: newSessionId })
-        });
-
-        if (!stepRes.ok) {
-          throw new Error(`Step execution failed: HTTP ${stepRes.status}`);
-        }
-
-        const stepData: ControlledStepResult = await stepRes.json();
+        const stepData: ControlledStepResult = await apiClient.post<ControlledStepResult>(
+          '/v1/live-agent/step',
+          { sessionId: newSessionId }
+        );
         setSteps((prev) => [...prev, stepData]);
         setSelectedStepIndex(stepNum - 1);
         await fetchCustomerStore();
@@ -220,18 +201,12 @@ export const LiveAgentView: React.FC = () => {
     if (!sessionId) return;
     setIsSubmittingDecision(true);
     try {
-      const res = await fetch('/api/v1/live-agent/decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          decision,
-          reviewerId: 'sec-ops-lead',
-          reason: `Security Operator selected ${decision}`
-        })
+      await apiClient.post('/v1/live-agent/decision', {
+        sessionId,
+        decision,
+        reviewerId: 'sec-ops-lead',
+        reason: `Security Operator selected ${decision}`
       });
-
-      if (!res.ok) throw new Error(`Decision submission failed: HTTP ${res.status}`);
 
       // Refresh customer store immediately after human decision
       await fetchCustomerStore();
@@ -259,18 +234,14 @@ export const LiveAgentView: React.FC = () => {
         setIsRunning(true);
         setTimeout(async () => {
           try {
-            const nextStepRes = await fetch('/api/v1/live-agent/step', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionId })
-            });
-            if (nextStepRes.ok) {
-              const nextStepData: ControlledStepResult = await nextStepRes.json();
-              setSteps((prev) => [...prev, nextStepData]);
-              setSelectedStepIndex(steps.length);
-              await fetchCustomerStore();
-              setSessionStatus(nextStepData.decision === 'BLOCK' ? 'BLOCKED' : 'COMPLETED');
-            }
+            const nextStepData: ControlledStepResult = await apiClient.post<ControlledStepResult>(
+              '/v1/live-agent/step',
+              { sessionId }
+            );
+            setSteps((prev) => [...prev, nextStepData]);
+            setSelectedStepIndex(steps.length);
+            await fetchCustomerStore();
+            setSessionStatus(nextStepData.decision === 'BLOCK' ? 'BLOCKED' : 'COMPLETED');
           } catch {
             setSessionStatus('COMPLETED');
           } finally {

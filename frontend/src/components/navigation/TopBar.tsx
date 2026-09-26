@@ -90,7 +90,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleMobileNav }) => {
           >
             <Radio className={`w-3.5 h-3.5 ${isOnline ? 'text-emerald-500 animate-pulse' : 'text-rose-500'}`} />
             <span className="hidden lg:inline">
-              {isOnline ? 'Control Layer Active' : 'API Offline'}
+              {isOnline ? 'API Connected' : 'API Offline'}
             </span>
             {isOnline && latencyMs !== undefined && (
               <span className="text-[10px] opacity-75 font-mono">

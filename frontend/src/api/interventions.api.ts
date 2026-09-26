@@ -1,3 +1,4 @@
+import { apiClient } from './client';
 import {
   PendingInterventionRecord,
   HumanDecisionPayload,
@@ -6,18 +7,17 @@ import {
   CounterfactualAnalysis
 } from '@sentinel/shared';
 
-const API_BASE = '/api/v1';
+interface InterventionsListResponse {
+  data?: PendingInterventionRecord[];
+  interventions?: PendingInterventionRecord[];
+}
 
 export const interventionsApi = {
   /**
    * Lists pending human review interventions
    */
   async listPending(): Promise<PendingInterventionRecord[]> {
-    const res = await fetch(`${API_BASE}/interventions?status=PENDING`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch pending interventions: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.get<InterventionsListResponse>('/v1/interventions?status=PENDING');
     return json.data || json.interventions || [];
   },
 
@@ -25,14 +25,10 @@ export const interventionsApi = {
    * Lists all interventions with optional status filter
    */
   async listAll(status?: string): Promise<PendingInterventionRecord[]> {
-    const url = status
-      ? `${API_BASE}/interventions?status=${encodeURIComponent(status)}`
-      : `${API_BASE}/interventions`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch interventions: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const endpoint = status
+      ? `/v1/interventions?status=${encodeURIComponent(status)}`
+      : '/v1/interventions';
+    const json = await apiClient.get<InterventionsListResponse>(endpoint);
     return json.data || json.interventions || [];
   },
 
@@ -40,11 +36,9 @@ export const interventionsApi = {
    * Retrieves single intervention details by ID
    */
   async getById(id: string): Promise<PendingInterventionRecord> {
-    const res = await fetch(`${API_BASE}/interventions/${encodeURIComponent(id)}`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch intervention ${id}: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.get<{ data?: PendingInterventionRecord } & PendingInterventionRecord>(
+      `/v1/interventions/${encodeURIComponent(id)}`
+    );
     return json.data || json;
   },
 
@@ -55,18 +49,10 @@ export const interventionsApi = {
     id: string,
     payload: HumanDecisionPayload
   ): Promise<PendingInterventionRecord> {
-    const res = await fetch(`${API_BASE}/interventions/${encodeURIComponent(id)}/decision`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || `Failed to submit decision: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.post<{ data?: PendingInterventionRecord } & PendingInterventionRecord>(
+      `/v1/interventions/${encodeURIComponent(id)}/decision`,
+      payload
+    );
     return json.data || json;
   },
 
@@ -74,11 +60,9 @@ export const interventionsApi = {
    * Gets intervention analysis for a session
    */
   async getSessionIntervention(sessionId: string): Promise<SessionInterventionResponse> {
-    const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/intervention`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch session intervention: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.get<{ data?: SessionInterventionResponse } & SessionInterventionResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/intervention`
+    );
     return json.data || json;
   },
 
@@ -86,11 +70,9 @@ export const interventionsApi = {
    * Gets forward risk forecast for a session
    */
   async getSessionForecast(sessionId: string): Promise<RiskForecast> {
-    const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/forecast`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch session forecast: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.get<{ data?: RiskForecast } & RiskForecast>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/forecast`
+    );
     return json.data || json;
   },
 
@@ -98,11 +80,9 @@ export const interventionsApi = {
    * Gets 3-path counterfactual simulation for a session
    */
   async getSessionCounterfactual(sessionId: string): Promise<CounterfactualAnalysis> {
-    const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}/counterfactual`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch counterfactual: ${res.statusText}`);
-    }
-    const json = await res.json();
+    const json = await apiClient.get<{ data?: CounterfactualAnalysis } & CounterfactualAnalysis>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/counterfactual`
+    );
     return json.data || json;
   }
 };
